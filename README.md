@@ -27,33 +27,49 @@ Herramientas básicas para sincronizar el catálogo de Contifico con un almacén
 | `CONTIFICO_API_BASE_URL` | (Opcional) URL base de la API, útil para entornos de prueba. |
 | `INVENTORY_DB_PATH` | (Opcional) Ruta al archivo SQLite. Por defecto `data/inventory.db`. |
 | `SYNC_BATCH_SIZE` | (Opcional) Tamaño de lote usado para escritura en base de datos. |
+| `CONTIFICO_PAGE_SIZE` | (Opcional) Registros solicitados por página a la API (por defecto 200). |
 
 Las variables se cargan automáticamente mediante [`python-dotenv`](https://github.com/theskumar/python-dotenv).
 
 ## Sincronización de datos
 
 La plataforma web expone un botón de **"Sincronizar ahora"** que lanza, en segundo plano, la
-descarga de productos, compras, ventas y bodegas desde la API de Contífico y guarda los resultados
-en la base SQLite configurada. Opcionalmente puedes indicar un punto de partida (`since`) usando el
-selector de fecha/hora para restringir la importación a cambios recientes.
+descarga de productos, compras, ventas, movimientos de inventario y bodegas desde la API de
+Contífico y guarda los resultados en la base SQLite configurada. Opcionalmente puedes indicar un
+punto de partida (`since`) usando el selector de fecha/hora para restringir la importación a cambios
+recientes.
+
+Para grandes volúmenes de información la sincronización se realiza en lotes: el cliente solicita
+páginas al API (`CONTIFICO_PAGE_SIZE`) y la capa de persistencia agrupa los registros recibidos
+(`SYNC_BATCH_SIZE`) antes de confirmarlos en disco. Así evitamos saturar memoria al descargar todos
+los movimientos y documentos históricos.
+
+Desde el formulario web puedes elegir **qué módulos sincronizar** (deja las casillas vacías para
+traer todo) y activar un modo de **descarga completa** que ignora el historial guardado para volver a
+pedir cada documento.
 
 El panel consume internamente el endpoint `POST /api/sync`, que queda disponible si deseas
 integrarlo con otras herramientas (por ejemplo, programar sincronizaciones desde un cron externo):
 
 ```bash
-curl -X POST "http://localhost:8000/api/sync?since=2024-01-01T00:00"
+curl -X POST "http://localhost:8000/api/sync?since=2024-01-01T00:00&resources=products&resources=inventory_movements"
 ```
+
+También puedes forzar una recarga total desde la API agregando `full_refresh=true` en la URL.
 
 Si necesitas ejecutar la sincronización fuera del entorno web, el módulo
 `src/ingestion/sync_inventory.py` expone la misma lógica a través de la función
 `synchronise_inventory` y mantiene la interfaz de línea de comandos como alternativa.
+Los argumentos opcionales permiten seleccionar módulos (`--resources products sales`), forzar un
+recorrido completo (`--full-refresh`) o ajustar el paginado remoto (`--page-size 500`).
 
 ### Esquema de la base de datos
 
 El repositorio crea automáticamente un archivo SQLite con las tablas `products`, `purchases`,
-`sales`, `warehouses` y la tabla auxiliar `sync_state` para almacenar la última ejecución por
-endpoint. Cada registro incluye la versión completa del JSON devuelto por la API y marcas de
-actualización (`updated_at`) y de captura (`fetched_at`).
+`sales`, `warehouses`, `inventory_movements` y la tabla auxiliar `sync_state` para almacenar la
+última ejecución por endpoint. Cada registro incluye la versión completa del JSON devuelto por la
+API, marcas de actualización (`updated_at`, `fecha_modificacion`, `fecha`, etc.) y de captura
+(`fetched_at`).
 
 ## Estructura del proyecto
 

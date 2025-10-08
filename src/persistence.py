@@ -42,6 +42,13 @@ CREATE TABLE IF NOT EXISTS warehouses (
     updated_at TEXT NOT NULL,
     fetched_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS inventory_movements (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
 """
 
 
@@ -69,16 +76,33 @@ class InventoryRepository:
         endpoint: str,
         records: Iterable[dict],
         record_id_field: str = "id",
+        timestamp_fields: Sequence[str] | None = None,
     ) -> int:
         table = endpoint
         now = datetime.utcnow().isoformat()
+        timestamp_fields = (
+            tuple(timestamp_fields)
+            if timestamp_fields
+            else (
+                "updated_at",
+                "fecha_modificacion",
+                "fecha",
+                "fecha_emision",
+                "created_at",
+            )
+        )
         rows = 0
         with self._connection() as conn:
             for record in records:
                 record_id = str(record.get(record_id_field))
                 if record_id is None:
                     continue
-                updated_at = record.get("updated_at") or record.get("fecha_modificacion")
+                updated_at = None
+                for field in timestamp_fields:
+                    value = record.get(field)
+                    if value:
+                        updated_at = value
+                        break
                 conn.execute(
                     f"""
                     INSERT INTO {table} (id, data, updated_at, fetched_at)
@@ -106,7 +130,13 @@ class InventoryRepository:
         synchronisation timestamp stored in ``sync_state``.
         """
 
-        resources = ["products", "purchases", "sales", "warehouses"]
+        resources = [
+            "products",
+            "purchases",
+            "sales",
+            "warehouses",
+            "inventory_movements",
+        ]
         overview: OrderedDict[str, dict[str, Optional[str] | int]] = OrderedDict()
 
         with self._connection() as conn:

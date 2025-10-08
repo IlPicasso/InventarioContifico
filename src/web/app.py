@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     contifico_api_base_url: str = "https://api.contifico.com/sistema/api/v1"
     inventory_db_path: str = "data/inventory.db"
     sync_batch_size: int = 100
+    contifico_page_size: int = 200
 
     class Config:
         env_file = ".env"
@@ -55,6 +56,7 @@ RESOURCE_LABELS = {
     "purchases": "Compras",
     "sales": "Ventas",
     "warehouses": "Bodegas",
+    "inventory_movements": "Movimientos de Inventario",
 }
 
 UPCOMING_FEATURES = (
@@ -101,6 +103,7 @@ def build_client(settings: Settings) -> ContificoClient:
         api_key=settings.contifico_api_key,
         api_token=settings.contifico_api_token,
         base_url=settings.contifico_api_base_url,
+        default_page_size=settings.contifico_page_size,
     )
 
 
@@ -123,6 +126,13 @@ def dashboard(
         for slug, data in overview.items()
     ]
     has_data = any(resource["count"] for resource in resources)
+    resource_options = [
+        {
+            "slug": slug,
+            "label": RESOURCE_LABELS.get(slug, slug.replace("_", " ").title()),
+        }
+        for slug in overview.keys()
+    ]
 
     return TEMPLATES.TemplateResponse(
         "dashboard.html",
@@ -132,6 +142,7 @@ def dashboard(
             "has_data": has_data,
             "upcoming": UPCOMING_FEATURES,
             "current_year": datetime.utcnow().year,
+            "resource_options": resource_options,
         },
     )
 
@@ -156,6 +167,8 @@ def api_overview(repo: InventoryRepository = Depends(get_repository)) -> dict[st
 def api_trigger_sync(
     background: BackgroundTasks,
     since: str | None = None,
+    resources: list[str] | None = Query(default=None),
+    full_refresh: bool = False,
 ) -> dict[str, Any]:
     """Kick off a background sync cycle using the configured credentials."""
 
@@ -164,6 +177,14 @@ def api_trigger_sync(
         since_dt = datetime.fromisoformat(since) if since else None
     except ValueError as exc:  # pragma: no cover - FastAPI handles validation
         raise HTTPException(status_code=400, detail="Formato de fecha inválido") from exc
+
+    selected_resources = [r for r in resources or [] if r]
+    invalid = sorted(set(selected_resources) - set(RESOURCE_LABELS.keys()))
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Recursos inválidos solicitados: {', '.join(invalid)}",
+        )
 
     def _run_sync() -> None:
         repo = InventoryRepository(settings.inventory_db_path)
@@ -174,6 +195,9 @@ def api_trigger_sync(
                 client,
                 since=since_dt,
                 batch_size=settings.sync_batch_size,
+                resources=selected_resources or None,
+                full_refresh=full_refresh,
+                page_size=settings.contifico_page_size,
             )
             logger.info("Sincronización completada: %s", totals)
         except Exception:  # pragma: no cover - runtime safeguard
@@ -184,4 +208,7 @@ def api_trigger_sync(
         "detail": "Sincronización en curso",
         "since": since,
         "batch_size": settings.sync_batch_size,
+        "resources": selected_resources or "all",
+        "full_refresh": full_refresh,
+        "page_size": settings.contifico_page_size,
     }

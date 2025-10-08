@@ -45,6 +45,7 @@ class ContificoClient:
         api_token: str,
         base_url: str | None = None,
         timeout: float = 30.0,
+        default_page_size: int | None = None,
     ) -> None:
         api_key = (api_key or "").strip()
         api_token = (api_token or "").strip()
@@ -61,6 +62,9 @@ class ContificoClient:
         self.api_token = api_token
         self.base_url = (base_url or self.DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
+        self.default_page_size = (
+            default_page_size if default_page_size and default_page_size > 0 else self.DEFAULT_PAGE_SIZE
+        )
 
     def _request(
         self,
@@ -129,7 +133,7 @@ class ContificoClient:
         page_size: int | None = None,
         extra_params: Optional[Dict[str, Any]] = None,
     ) -> Iterator[Dict[str, Any]]:
-        size = page_size or self.DEFAULT_PAGE_SIZE
+        size = page_size or self.default_page_size
         page = 1
         while True:
             params: Dict[str, Any] = {
@@ -215,6 +219,20 @@ class ContificoClient:
         # El endpoint de bodegas no soporta filtros de fecha, pero mantenemos la firma homogénea.
         return self._iterate_endpoint(
             "bodega/",
+            updated_since=updated_since,
+            page_size=page_size,
+        )
+
+    def iter_inventory_movements(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield inventory movement documents (traslados, ingresos, egresos)."""
+
+        return self._iterate_endpoint(
+            "movimiento-inventario/",
             updated_since=updated_since,
             page_size=page_size,
         )
