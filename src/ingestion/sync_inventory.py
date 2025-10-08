@@ -24,6 +24,32 @@ ENDPOINTS = {
 }
 
 
+def synchronise_inventory(
+    repo: InventoryRepository,
+    client: ContificoClient,
+    *,
+    since: datetime | None = None,
+    batch_size: int = 100,
+) -> dict[str, int]:
+    """Run a full sync cycle for every configured resource."""
+
+    totals: dict[str, int] = {}
+    for endpoint, fetcher in ENDPOINTS.items():
+        logger.info("Syncing %s", endpoint)
+        last_synced = since or repo.get_last_synced_at(endpoint)
+        total = 0
+
+        records = fetcher(client, last_synced)
+        for batch in chunked(records, batch_size):
+            total += repo.upsert_records(endpoint, batch)
+
+        repo.update_last_synced_at(endpoint, datetime.now(timezone.utc))
+        totals[endpoint] = total
+        logger.info("%s sync complete: %s records", endpoint, total)
+
+    return totals
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -60,18 +86,7 @@ def main() -> None:
 
     forced_since = datetime.fromisoformat(args.since) if args.since else None
 
-    for endpoint, fetcher in ENDPOINTS.items():
-        logger.info("Syncing %s", endpoint)
-        last_synced = forced_since or repo.get_last_synced_at(endpoint)
-        updated_since = last_synced
-        total = 0
-
-        records = fetcher(client, updated_since)
-        for batch in chunked(records, args.batch_size):
-            total += repo.upsert_records(endpoint, batch)
-
-        repo.update_last_synced_at(endpoint, datetime.now(timezone.utc))
-        logger.info("%s sync complete: %s records", endpoint, total)
+    synchronise_inventory(repo, client, since=forced_since, batch_size=args.batch_size)
 
 
 if __name__ == "__main__":

@@ -1,18 +1,22 @@
 """FastAPI application that powers the Contifico inventory dashboard."""
 from __future__ import annotations
 
-import os
+import logging
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
+from pydantic_settings import BaseSettings
 
+from ..contifico_client import ContificoClient
+from ..ingestion.sync_inventory import synchronise_inventory
 from ..persistence import InventoryRepository
 
 load_dotenv()
@@ -20,6 +24,22 @@ load_dotenv()
 BASE_PATH = Path(__file__).parent
 TEMPLATES = Jinja2Templates(directory=str(BASE_PATH / "templates"))
 STATIC_DIR = BASE_PATH / "static"
+
+logger = logging.getLogger(__name__)
+
+
+class Settings(BaseSettings):
+    """Application configuration sourced from environment variables."""
+
+    contifico_api_key: str
+    contifico_api_token: str
+    contifico_api_base_url: str = "https://api.contifico.com/sistema/api/v1"
+    inventory_db_path: str = "data/inventory.db"
+    sync_batch_size: int = 100
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
 app = FastAPI(
     title="Inventario Contifico",
@@ -53,12 +73,35 @@ UPCOMING_FEATURES = (
 )
 
 
+@lru_cache()
+def get_settings() -> Settings:
+    """Return cached application settings."""
+
+    try:
+        return Settings()
+    except ValidationError as exc:  # pragma: no cover - defensive guard for runtime
+        missing = {err["loc"][0] for err in exc.errors() if err["type"] == "value_error.missing"}
+        raise RuntimeError(
+            "Faltan variables de entorno requeridas: " + ", ".join(sorted(missing))
+        ) from exc
+
+
 @lru_cache(maxsize=1)
 def get_repository() -> InventoryRepository:
     """Initialise (and cache) the repository according to the configured DB path."""
 
-    db_path = os.getenv("INVENTORY_DB_PATH", "data/inventory.db")
-    return InventoryRepository(db_path)
+    settings = get_settings()
+    return InventoryRepository(settings.inventory_db_path)
+
+
+def build_client(settings: Settings) -> ContificoClient:
+    """Instantiate a Contifico client using the configured credentials."""
+
+    return ContificoClient(
+        api_key=settings.contifico_api_key,
+        api_token=settings.contifico_api_token,
+        base_url=settings.contifico_api_base_url,
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -107,3 +150,38 @@ def api_overview(repo: InventoryRepository = Depends(get_repository)) -> dict[st
         for slug, data in overview.items()
     ]
     return {"resources": payload}
+
+
+@app.post("/api/sync", status_code=202)
+def api_trigger_sync(
+    background: BackgroundTasks,
+    since: str | None = None,
+) -> dict[str, Any]:
+    """Kick off a background sync cycle using the configured credentials."""
+
+    settings = get_settings()
+    try:
+        since_dt = datetime.fromisoformat(since) if since else None
+    except ValueError as exc:  # pragma: no cover - FastAPI handles validation
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido") from exc
+
+    def _run_sync() -> None:
+        repo = InventoryRepository(settings.inventory_db_path)
+        client = build_client(settings)
+        try:
+            totals = synchronise_inventory(
+                repo,
+                client,
+                since=since_dt,
+                batch_size=settings.sync_batch_size,
+            )
+            logger.info("Sincronización completada: %s", totals)
+        except Exception:  # pragma: no cover - runtime safeguard
+            logger.exception("Falló la sincronización de inventario")
+
+    background.add_task(_run_sync)
+    return {
+        "detail": "Sincronización en curso",
+        "since": since,
+        "batch_size": settings.sync_batch_size,
+    }

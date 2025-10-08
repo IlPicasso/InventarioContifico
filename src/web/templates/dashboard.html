@@ -10,6 +10,26 @@
   </p>
 </section>
 
+<section class="sync">
+  <h2>Sincroniza tu inventario</h2>
+  <p>
+    Lanza una sincronización inmediata contra la API de Contífico para refrescar los datos
+    almacenados en esta instancia.
+  </p>
+  <form id="sync-form" class="sync__form">
+    <label class="sync__label" for="since">Importar cambios desde (opcional)</label>
+    <input
+      id="since"
+      name="since"
+      type="datetime-local"
+      class="sync__input"
+      placeholder="2024-01-01T00:00"
+    />
+    <button type="submit" class="sync__button">Sincronizar ahora</button>
+  </form>
+  <p id="sync-status" class="sync__status" role="status"></p>
+</section>
+
 <section class="cards">
   {% for resource in resources %}
   <article class="card">
@@ -38,8 +58,8 @@
   <article class="card card--empty">
     <h3>Aún no hay datos</h3>
     <p>
-      Ejecuta <code>python -m src.ingestion.sync_inventory</code> para poblar la base local y
-      comenzar a construir análisis desde este panel.
+      Realiza una sincronización desde el panel para poblar la base local y comenzar a construir
+      análisis desde este panel.
     </p>
   </article>
   {% endif %}
@@ -57,4 +77,34 @@
     {% endfor %}
   </ul>
 </section>
+
+{% block scripts %}
+<script>
+  const syncForm = document.querySelector('#sync-form');
+  const syncStatus = document.querySelector('#sync-status');
+
+  if (syncForm) {
+    syncForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      syncStatus.textContent = 'Lanzando sincronización…';
+
+      const formData = new FormData(syncForm);
+      const since = formData.get('since');
+      const params = since ? `?since=${encodeURIComponent(since)}` : '';
+
+      try {
+        const response = await fetch(`/api/sync${params}`, { method: 'POST' });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'No se pudo iniciar la sincronización');
+        }
+        const payload = await response.json();
+        syncStatus.textContent = `✔ ${payload.detail}. Puedes refrescar la página en unos minutos para ver los resultados.`;
+      } catch (error) {
+        syncStatus.textContent = `✖ ${error.message}`;
+      }
+    });
+  }
+</script>
+{% endblock %}
 {% endblock %}
