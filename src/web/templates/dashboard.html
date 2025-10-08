@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Resumen de Inventario · Inventario Contifico{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h2 class="hero__title">Resumen del inventario sincronizado</h2>
+  <p class="hero__subtitle">
+    Consulta el estado actual de los catálogos y movimientos obtenidos desde Contífico.
+  </p>
+</section>
+
+<section class="cards">
+  {% for resource in resources %}
+  <article class="card">
+    <header class="card__header">
+      <h3>{{ resource.label }}</h3>
+      <span class="card__count">{{ resource.count }}</span>
+    </header>
+    <dl class="card__meta">
+      <div>
+        <dt>Última actualización (API)</dt>
+        <dd>{{ resource.last_updated or "Sin datos" }}</dd>
+      </div>
+      <div>
+        <dt>Última captura (local)</dt>
+        <dd>{{ resource.last_fetched or "Sin datos" }}</dd>
+      </div>
+      <div>
+        <dt>Última sincronización</dt>
+        <dd>{{ resource.last_synced or "Sin registros" }}</dd>
+      </div>
+    </dl>
+  </article>
+  {% endfor %}
+
+  {% if not has_data %}
+  <article class="card card--empty">
+    <h3>Aún no hay datos</h3>
+    <p>
+      Ejecuta <code>python -m src.ingestion.sync_inventory</code> para poblar la base local y
+      comenzar a construir análisis desde este panel.
+    </p>
+  </article>
+  {% endif %}
+</section>
+
+<section class="upcoming">
+  <h2>Próximas funcionalidades</h2>
+  <p>Estas ideas guiarán los análisis y visualizaciones que añadiremos sobre el inventario.</p>
+  <ul class="upcoming__list">
+    {% for item in upcoming %}
+    <li>
+      <h3>{{ item.title }}</h3>
+      <p>{{ item.description }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}
