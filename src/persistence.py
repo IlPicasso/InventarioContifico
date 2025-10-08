@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -96,6 +97,43 @@ class InventoryRepository:
                 )
                 rows += 1
         return rows
+
+    def get_resource_overview(self) -> OrderedDict[str, dict[str, Optional[str] | int]]:
+        """Return aggregated information per resource table.
+
+        The overview includes the number of stored records, the latest update timestamp
+        reported by Contifico, when the record was fetched locally, and the last
+        synchronisation timestamp stored in ``sync_state``.
+        """
+
+        resources = ["products", "purchases", "sales", "warehouses"]
+        overview: OrderedDict[str, dict[str, Optional[str] | int]] = OrderedDict()
+
+        with self._connection() as conn:
+            sync_state = {
+                row["endpoint"]: row["last_synced_at"]
+                for row in conn.execute("SELECT endpoint, last_synced_at FROM sync_state")
+            }
+
+            for resource in resources:
+                row = conn.execute(
+                    f"""
+                    SELECT
+                        COUNT(*) AS count,
+                        MAX(updated_at) AS last_updated,
+                        MAX(fetched_at) AS last_fetched
+                    FROM {resource}
+                    """
+                ).fetchone()
+
+                overview[resource] = {
+                    "count": int(row["count"]) if row and row["count"] is not None else 0,
+                    "last_updated": row["last_updated"] if row else None,
+                    "last_fetched": row["last_fetched"] if row else None,
+                    "last_synced": sync_state.get(resource),
+                }
+
+        return overview
 
     def get_last_synced_at(self, endpoint: str) -> Optional[datetime]:
         with self._connection() as conn:
