@@ -1,1 +1,138 @@
-# InventarioContifico
+# Inventario Contifico
+
+Herramientas básicas para sincronizar el catálogo de Contifico con un almacén local.
+
+## Requisitos iniciales
+
+1. Crear un entorno virtual:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+2. Instalar dependencias:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Copiar el archivo de variables de entorno y completarlo:
+   ```bash
+   cp .env.example .env
+   ```
+
+## Variables de entorno
+
+| Variable | Descripción |
+| --- | --- |
+| `CONTIFICO_API_KEY` | API Key provista por Contífico. |
+| `CONTIFICO_API_TOKEN` | API Token asociado a la clave anterior. |
+| `CONTIFICO_API_BASE_URL` | (Opcional) URL base de la API, útil para entornos de prueba. |
+| `INVENTORY_DB_PATH` | (Opcional) Ruta al archivo SQLite. Por defecto `data/inventory.db`. |
+| `SYNC_BATCH_SIZE` | (Opcional) Tamaño de lote usado para escritura en base de datos. |
+
+Las variables se cargan automáticamente mediante [`python-dotenv`](https://github.com/theskumar/python-dotenv).
+
+## Sincronización de datos
+
+La plataforma web expone un botón de **"Sincronizar ahora"** que lanza, en segundo plano, la
+descarga de productos, compras, ventas y bodegas desde la API de Contífico y guarda los resultados
+en la base SQLite configurada. Opcionalmente puedes indicar un punto de partida (`since`) usando el
+selector de fecha/hora para restringir la importación a cambios recientes.
+
+El panel consume internamente el endpoint `POST /api/sync`, que queda disponible si deseas
+integrarlo con otras herramientas (por ejemplo, programar sincronizaciones desde un cron externo):
+
+```bash
+curl -X POST "http://localhost:8000/api/sync?since=2024-01-01T00:00"
+```
+
+Si necesitas ejecutar la sincronización fuera del entorno web, el módulo
+`src/ingestion/sync_inventory.py` expone la misma lógica a través de la función
+`synchronise_inventory` y mantiene la interfaz de línea de comandos como alternativa.
+
+### Esquema de la base de datos
+
+El repositorio crea automáticamente un archivo SQLite con las tablas `products`, `purchases`,
+`sales`, `warehouses` y la tabla auxiliar `sync_state` para almacenar la última ejecución por
+endpoint. Cada registro incluye la versión completa del JSON devuelto por la API y marcas de
+actualización (`updated_at`) y de captura (`fetched_at`).
+
+## Estructura del proyecto
+
+```
+├── src/
+│   ├── contifico_client.py    # Cliente HTTP para la API de Contifico
+│   ├── persistence.py         # Acceso a la base de datos SQLite
+│   ├── ingestion/
+│   │   └── sync_inventory.py  # Script de sincronización incremental
+│   └── web/
+│       ├── app.py             # Aplicación FastAPI para visualizar el inventario
+│       ├── templates/         # Vistas Jinja2 para el panel web
+│       └── static/            # Recursos estáticos (CSS, imágenes, etc.)
+├── requirements.txt
+├── .env.example
+└── README.md
+```
+
+## Plataforma web
+
+La carpeta `src/web` contiene una aplicación [FastAPI](https://fastapi.tiangolo.com/) con vistas
+en Jinja2 que permite consultar el estado del inventario sincronizado y servirá de base para los
+análisis que se añadirán más adelante.
+
+Para ejecutar la aplicación localmente:
+
+```bash
+uvicorn src.web.app:app --reload
+```
+
+Luego abre <http://127.0.0.1:8000> en tu navegador. La página principal muestra un resumen de los
+recursos sincronizados (número de registros y fechas de actualización), un formulario para lanzar
+sincronizaciones y un roadmap con los próximos análisis a construir.
+
+## Despliegue recomendado en una VPS
+
+1. **Preparar el servidor**
+   - Instala Python 3.11 o superior y herramientas básicas: `sudo apt update && sudo apt install python3-venv git`.
+   - Crea un usuario dedicado (opcional) y clona el repositorio en `/opt/inventario-contifico`.
+
+2. **Configurar el entorno de ejecución**
+   ```bash
+   cd /opt/inventario-contifico
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   cp .env.example .env  # completa las credenciales de Contífico
+   mkdir -p data && touch data/inventory.db
+   ```
+
+3. **Servicio con Uvicorn + Systemd** (archivo `/etc/systemd/system/inventario.service`):
+
+   ```ini
+   [Unit]
+   Description=Inventario Contifico
+   After=network.target
+
+   [Service]
+   User=www-data
+   WorkingDirectory=/opt/inventario-contifico
+   Environment="PATH=/opt/inventario-contifico/.venv/bin"
+   ExecStart=/opt/inventario-contifico/.venv/bin/uvicorn src.web.app:app --host 0.0.0.0 --port 8000
+   Restart=on-failure
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+   Aplica los cambios: `sudo systemctl daemon-reload && sudo systemctl enable --now inventario`.
+
+4. **Exponer la aplicación**
+   - Para HTTPS y dominio propio, configura un proxy inverso (Nginx o Caddy) que apunte a
+     `http://127.0.0.1:8000` y gestione certificados con Let's Encrypt.
+   - Si deseas orquestar sincronizaciones programadas, puedes usar `cron` para invocar el endpoint
+     `POST /api/sync` mediante `curl` o `systemd timers`.
+
+## Próximos pasos sugeridos
+
+- Añadir pruebas automáticas para la capa de persistencia y la API.
+- Incorporar visualizaciones de KPIs y comparativas históricas en el panel web.
+- Extender el cliente con endpoints adicionales según las necesidades del negocio.

@@ -1,0 +1,248 @@
+:root {
+  color-scheme: light dark;
+  --color-bg: #f4f6fb;
+  --color-surface: #ffffff;
+  --color-border: #d7deea;
+  --color-text: #1f2a44;
+  --color-muted: #5b6c8f;
+  --color-accent: #0b7285;
+  font-family: "Inter", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+.container {
+  width: min(1100px, 92vw);
+  margin: 0 auto;
+  padding: 2rem 0;
+}
+
+.site-header {
+  background: linear-gradient(135deg, #0b7285, #1971c2);
+  color: #fff;
+  padding: 2.5rem 0 2rem;
+}
+
+.site-title {
+  margin: 0;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+}
+
+.site-subtitle {
+  margin: 0.5rem 0 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.hero {
+  margin-bottom: 2rem;
+}
+
+.hero__title {
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  margin-bottom: 0.5rem;
+}
+
+.hero__subtitle {
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.sync {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-bottom: 2.5rem;
+  box-shadow: 0 12px 25px rgba(15, 23, 42, 0.08);
+}
+
+.sync h2 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.sync__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin: 1rem 0 0;
+}
+
+.sync__label {
+  width: 100%;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.sync__input {
+  flex: 1 1 200px;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  font: inherit;
+}
+
+.sync__button {
+  padding: 0.65rem 1.5rem;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #0b7285, #1971c2);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.sync__button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 20px rgba(25, 113, 194, 0.25);
+}
+
+.sync__button:active {
+  transform: translateY(0);
+}
+
+.sync__status {
+  margin: 1rem 0 0;
+  color: var(--color-muted);
+  min-height: 1.5rem;
+}
+
+.cards {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-bottom: 3rem;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.75rem;
+}
+
+.card__header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.card__count {
+  font-weight: 600;
+  font-size: 1.8rem;
+  color: var(--color-accent);
+}
+
+.card__meta {
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.card__meta div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.card__meta dt {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.card__meta dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.card--empty {
+  text-align: center;
+  border-style: dashed;
+}
+
+.card--empty code {
+  background: rgba(11, 114, 133, 0.08);
+  color: var(--color-accent);
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+}
+
+.upcoming h2 {
+  margin-bottom: 0.5rem;
+}
+
+.upcoming__list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.upcoming__list li {
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.upcoming__list h3 {
+  margin: 0 0 0.5rem;
+}
+
+.site-footer {
+  background: #0b7285;
+  color: rgba(255, 255, 255, 0.85);
+  padding: 1rem 0;
+  margin-top: 3rem;
+}
+
+.site-footer p {
+  margin: 0;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0e1627;
+    --color-surface: #162038;
+    --color-border: #23324c;
+    --color-text: #ecf2ff;
+    --color-muted: #97a7c9;
+    --color-accent: #4dd0e1;
+  }
+
+  .card {
+    box-shadow: 0 15px 25px rgba(2, 6, 23, 0.35);
+  }
+
+  .upcoming__list li {
+    background: rgba(236, 242, 255, 0.05);
+    border-color: rgba(236, 242, 255, 0.08);
+  }
+}
