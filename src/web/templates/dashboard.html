@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Resumen de Inventario · Inventario Contifico{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h2 class="hero__title">Resumen del inventario sincronizado</h2>
+  <p class="hero__subtitle">
+    Consulta el estado actual de los catálogos y movimientos obtenidos desde Contífico.
+  </p>
+</section>
+
+<section class="sync">
+  <h2>Sincroniza tu inventario</h2>
+  <p>
+    Lanza una sincronización inmediata contra la API de Contífico para refrescar los datos
+    almacenados en esta instancia.
+  </p>
+  <form id="sync-form" class="sync__form">
+    <label class="sync__label" for="since">Importar cambios desde (opcional)</label>
+    <input
+      id="since"
+      name="since"
+      type="datetime-local"
+      class="sync__input"
+      placeholder="2024-01-01T00:00"
+    />
+    <fieldset class="sync__fieldset">
+      <legend>¿Qué deseas sincronizar?</legend>
+      <p class="sync__hint">Deja las casillas vacías para importar todos los módulos.</p>
+      <div class="sync__options">
+        {% for option in resource_options %}
+        <label class="sync__checkbox">
+          <input type="checkbox" name="resources" value="{{ option.slug }}" />
+          <span>{{ option.label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="sync__actions">
+        <button type="button" class="sync__toggle" data-action="select-all">
+          Seleccionar todo
+        </button>
+        <button type="button" class="sync__toggle" data-action="clear-all">
+          Limpiar selección
+        </button>
+      </div>
+    </fieldset>
+    <label class="sync__checkbox sync__checkbox--single">
+      <input type="checkbox" name="full_refresh" value="1" />
+      <span>Descargar todo otra vez (ignora la última sincronización)</span>
+    </label>
+    <button type="submit" class="sync__button">Sincronizar ahora</button>
+  </form>
+  <p id="sync-status" class="sync__status" role="status"></p>
+</section>
+
+<section class="cards">
+  {% for resource in resources %}
+  <article class="card">
+    <header class="card__header">
+      <h3>{{ resource.label }}</h3>
+      <span class="card__count">{{ resource.count }}</span>
+    </header>
+    <dl class="card__meta">
+      <div>
+        <dt>Última actualización (API)</dt>
+        <dd>{{ resource.last_updated or "Sin datos" }}</dd>
+      </div>
+      <div>
+        <dt>Última captura (local)</dt>
+        <dd>{{ resource.last_fetched or "Sin datos" }}</dd>
+      </div>
+      <div>
+        <dt>Última sincronización</dt>
+        <dd>{{ resource.last_synced or "Sin registros" }}</dd>
+      </div>
+    </dl>
+  </article>
+  {% endfor %}
+
+  {% if not has_data %}
+  <article class="card card--empty">
+    <h3>Aún no hay datos</h3>
+    <p>
+      Realiza una sincronización desde el panel para poblar la base local y comenzar a construir
+      análisis desde este panel.
+    </p>
+  </article>
+  {% endif %}
+</section>
+
+<section class="upcoming">
+  <h2>Próximas funcionalidades</h2>
+  <p>Estas ideas guiarán los análisis y visualizaciones que añadiremos sobre el inventario.</p>
+  <ul class="upcoming__list">
+    {% for item in upcoming %}
+    <li>
+      <h3>{{ item.title }}</h3>
+      <p>{{ item.description }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+{% block scripts %}
+<script>
+  const syncForm = document.querySelector('#sync-form');
+  const syncStatus = document.querySelector('#sync-status');
+
+  if (syncForm) {
+    syncForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      syncStatus.textContent = 'Lanzando sincronización…';
+
+      const formData = new FormData(syncForm);
+      const params = new URLSearchParams();
+      const since = formData.get('since');
+      if (since) {
+        params.append('since', since);
+      }
+      formData
+        .getAll('resources')
+        .filter((value) => value)
+        .forEach((value) => params.append('resources', value));
+      if (formData.get('full_refresh')) {
+        params.append('full_refresh', 'true');
+      }
+
+      try {
+        const queryString = params.toString();
+        const response = await fetch(`/api/sync${queryString ? `?${queryString}` : ''}`, {
+          method: 'POST',
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'No se pudo iniciar la sincronización');
+        }
+        const payload = await response.json();
+        syncStatus.textContent = `✔ ${payload.detail}. Puedes refrescar la página en unos minutos para ver los resultados.`;
+      } catch (error) {
+        syncStatus.textContent = `✖ ${error.message}`;
+      }
+    });
+
+    const toggleButtons = syncForm.querySelectorAll('.sync__toggle');
+    const resourceCheckboxes = syncForm.querySelectorAll('input[name="resources"]');
+    toggleButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const action = button.dataset.action;
+        resourceCheckboxes.forEach((checkbox) => {
+          if (action === 'select-all') {
+            checkbox.checked = true;
+          }
+          if (action === 'clear-all') {
+            checkbox.checked = false;
+          }
+        });
+      });
+    });
+  }
+</script>
+{% endblock %}
+{% endblock %}
