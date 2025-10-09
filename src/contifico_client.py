@@ -427,7 +427,12 @@ class ContificoClient:
             "documento/",
             updated_since=updated_since,
             page_size=page_size,
-            legacy_aliases=False,
+            # El endpoint de documentos aún depende de los alias ``result_*``
+            # documentados públicamente; si usamos los nuevos nombres no
+            # respeta la paginación y Contífico termina devolviendo cargas
+            # masivas que agotan el timeout del cliente. Mantener los alias
+            # evita los timeouts observados en producción.
+            legacy_aliases=True,
             updated_since_field="fecha_emision__gte",
         )
 
@@ -443,7 +448,9 @@ class ContificoClient:
             "registro/transaccion/",
             updated_since=updated_since,
             page_size=page_size,
-            legacy_aliases=False,
+            # Igual que el endpoint de documentos, las transacciones de registro
+            # todavía usan ``result_page``/``result_size`` para paginar.
+            legacy_aliases=True,
         )
 
     def iter_persons(
@@ -458,7 +465,8 @@ class ContificoClient:
             "persona/",
             updated_since=updated_since,
             page_size=page_size,
-            legacy_aliases=False,
+            # ``persona`` sigue el mismo esquema legacy de paginación.
+            legacy_aliases=True,
         )
 
     def iter_cost_centers(
