@@ -251,6 +251,66 @@ class ContificoClient:
                 break
             page += 1
 
+    def _iterate_endpoint_candidates(
+        self,
+        endpoints: Iterable[str],
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Iterate through a sequence of endpoints using the first one that works."""
+
+        last_error: ContificoAPIError | None = None
+        for endpoint in endpoints:
+            try:
+                yield from self._iterate_endpoint(
+                    endpoint,
+                    updated_since=updated_since,
+                    page_size=page_size,
+                    extra_params=extra_params,
+                )
+                return
+            except ContificoAPIError as exc:
+                if not self._should_retry_endpoint_candidate(exc):
+                    raise
+                logger.debug(
+                    "Endpoint %s rechazado (%s), intentando alternativa",
+                    endpoint,
+                    exc,
+                )
+                last_error = exc
+                continue
+
+        if last_error is not None:
+            raise last_error
+
+    @staticmethod
+    def _should_retry_endpoint_candidate(error: ContificoAPIError) -> bool:
+        """Return True if a failed candidate should be retried with the next option."""
+
+        if error.status_code == 404:
+            return True
+
+        if error.status_code == 400:
+            # Algunos despliegues responden ``400 id incorrecto`` cuando el nuevo
+            # endpoint ``documento/`` aún no está disponible para listados. En ese
+            # caso debemos intentar con el alias histórico.
+            message = ""
+            payload = error.payload
+            if isinstance(payload, dict):
+                for key in ("mensaje", "message", "detail"):
+                    value = payload.get(key)
+                    if isinstance(value, str):
+                        message = value
+                        break
+            if not message and isinstance(error.detail, str):
+                message = error.detail
+            if "id incorrecto" in message.lower():
+                return True
+
+        return False
+
     def iter_products(
         self,
         *,
@@ -273,8 +333,8 @@ class ContificoClient:
     ) -> Iterable[Dict[str, Any]]:
         """Yield purchase documents registered in Contífico."""
 
-        return self._iterate_endpoint(
-            "compra/",
+        return self._iterate_endpoint_candidates(
+            ("documento/compra/", "compra/"),
             updated_since=updated_since,
             page_size=page_size,
         )
@@ -287,8 +347,8 @@ class ContificoClient:
     ) -> Iterable[Dict[str, Any]]:
         """Yield sales documents registered in Contífico."""
 
-        return self._iterate_endpoint(
-            "venta/",
+        return self._iterate_endpoint_candidates(
+            ("documento/venta/", "venta/"),
             updated_since=updated_since,
             page_size=page_size,
         )
