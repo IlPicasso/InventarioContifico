@@ -36,30 +36,25 @@ Las variables se cargan automáticamente mediante [`python-dotenv`](https://gith
 ## Sincronización de datos
 
 La plataforma web expone un botón de **"Sincronizar ahora"** que lanza, en segundo plano, la
-descarga de productos, compras, ventas, movimientos de inventario y bodegas desde la API de
-Contífico y guarda los resultados en la base SQLite configurada. Los recursos corresponden a los
-endpoints documentados en <https://contifico.github.io/>: productos (`GET /producto/`), bodegas
-(`GET /bodega/`), movimientos de inventario (`GET /movimiento-inventario/`) y documentos del
-registro (`GET /registro/documento/`) filtrados por `tipo` (`FAC` para facturas y `LQC` para
-liquidaciones de compra) y `tipo_registro` (`CLI` para clientes, `PRO` para proveedores). Opcionalmente
-puedes indicar un punto de partida (`since`) usando el selector de fecha/hora para restringir la
-importación a cambios recientes.
+descarga de todos los catálogos disponibles en la API pública de Contífico y guarda los resultados
+en la base SQLite configurada. Se incluyen los módulos de inventario (categorías, marcas,
+variantes, productos, bodegas y guías de remisión), los documentos del registro (`GET
+/registro/documento/` para ventas y compras), el catálogo general de documentos (`GET /documento/`),
+las transacciones (`GET /registro/transaccion/`), las personas (`GET /persona/`) y los centros de
+costo (`GET /contabilidad/centro-costo/`). Opcionalmente puedes indicar un punto de partida
+(`since`) usando el selector de fecha/hora para restringir la importación a cambios recientes.
 
 Para grandes volúmenes de información la sincronización se realiza en lotes: el cliente solicita
 páginas al API (`CONTIFICO_PAGE_SIZE`) y la capa de persistencia agrupa los registros recibidos
 (`SYNC_BATCH_SIZE`) antes de confirmarlos en disco. Así evitamos saturar memoria al descargar todos
-los movimientos y documentos históricos.
+los catálogos y documentos históricos.
 
 Desde el formulario web puedes elegir **qué módulos sincronizar** (deja las casillas vacías para
 traer todo) y activar un modo de **descarga completa** que ignora el historial guardado para volver a
 pedir cada documento.
 
 El panel consume internamente el endpoint `POST /api/sync`, que queda disponible si deseas
-integrarlo con otras herramientas (por ejemplo, programar sincronizaciones desde un cron externo):
-
-```bash
-curl -X POST "http://localhost:8000/api/sync?since=2024-01-01T00:00&resources=products&resources=inventory_movements"
-```
+integrarlo con otras herramientas (por ejemplo, programar sincronizaciones desde un cron externo).
 
 También puedes forzar una recarga total desde la API agregando `full_refresh=true` en la URL.
 
@@ -86,11 +81,13 @@ generó la respuesta de error de la API.
 
 ### Esquema de la base de datos
 
-El repositorio crea automáticamente un archivo SQLite con las tablas `products`, `purchases`,
-`sales`, `warehouses`, `inventory_movements` y la tabla auxiliar `sync_state` para almacenar la
-última ejecución por endpoint. Cada registro incluye la versión completa del JSON devuelto por la
-API, marcas de actualización (`updated_at`, `fecha_modificacion`, `fecha`, etc.) y de captura
-(`fetched_at`).
+El repositorio crea automáticamente un archivo SQLite con una tabla por endpoint sincronizado:
+`categories`, `brands`, `variants`, `products`, `warehouses`, `remission_guides`, `purchases`,
+`sales`, `documents`, `registry_transactions`, `persons`, `cost_centers` y la tabla auxiliar
+`sync_state` para almacenar la última ejecución por recurso.
+Cada registro incluye la
+versión completa del JSON devuelto por la API, marcas de actualización (`updated_at`,
+`fecha_modificacion`, `fecha`, etc.) y de captura (`fetched_at`).
 
 ## Estructura del proyecto
 
