@@ -7,6 +7,11 @@ from typing import Iterable, Iterator, Sequence
 from ..persistence import InventoryRepository
 from .models import Purchase, Sale, StockLevel
 
+_PURCHASE_REGISTRY_TYPES = {"PRO"}
+_SALE_REGISTRY_TYPES = {"CLI"}
+_PURCHASE_DOCUMENT_TYPES = {"LQC", "LCM", "PUR", "COM"}
+_SALE_DOCUMENT_TYPES = {"FAC", "FCE", "FAT", "NCV", "NDE", "NVV"}
+
 _DATETIME_FIELDS = (
     "fecha_emision",
     "fecha",
@@ -58,6 +63,35 @@ def _parse_float(value: object, default: float = 0.0) -> float:
         return float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return default
+
+
+def _normalise_code(value: object | None) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    return text.upper()
+
+
+def _extract_from_payload(record: dict, *candidates: str) -> object | None:
+    data = record.get("data") or {}
+    for key in candidates:
+        if key in data and data[key] is not None:
+            return data[key]
+        if key in record and record[key] is not None:
+            return record[key]
+    return None
+
+
+def _extract_document_type(record: dict) -> str:
+    return _normalise_code(
+        _extract_from_payload(record, "tipo", "tipo_documento", "documento_tipo")
+    )
+
+
+def _extract_registry_type(record: dict) -> str:
+    return _normalise_code(
+        _extract_from_payload(record, "tipo_registro", "registro_tipo", "registroTipo")
+    )
 
 
 def _extract_first_datetime(data: dict, fields: Sequence[str]) -> datetime | None:
@@ -138,7 +172,12 @@ def load_purchases(
 
     records = repo.search_records("purchases", limit=limit)
     purchases: list[Purchase] = []
+    seen_documents: set[str] = set()
     for record in records:
+        raw_id = record.get("id")
+        document_id = str(raw_id) if raw_id is not None else None
+        if document_id:
+            seen_documents.add(document_id)
         for purchase in _iter_purchase_lines(record):
             if product_id and (
                 purchase.product_id != product_id
@@ -146,6 +185,31 @@ def load_purchases(
             ):
                 continue
             purchases.append(purchase)
+
+    if len(purchases) < limit:
+        fallback_records = repo.search_records("documents", limit=limit)
+        for record in fallback_records:
+            raw_id = record.get("id")
+            document_id = str(raw_id) if raw_id is not None else None
+            if document_id and document_id in seen_documents:
+                continue
+
+            registry_type = _extract_registry_type(record)
+            document_type = _extract_document_type(record)
+            if registry_type and registry_type not in _PURCHASE_REGISTRY_TYPES:
+                continue
+            if not registry_type:
+                if not document_type or document_type not in _PURCHASE_DOCUMENT_TYPES:
+                    continue
+
+            for purchase in _iter_purchase_lines(record):
+                if product_id and (
+                    purchase.product_id != product_id
+                    and purchase.product_code != product_id
+                ):
+                    continue
+                purchases.append(purchase)
+
     return purchases
 
 
@@ -195,13 +259,41 @@ def load_sales(
 
     records = repo.search_records("sales", limit=limit)
     sales: list[Sale] = []
+    seen_documents: set[str] = set()
     for record in records:
+        raw_id = record.get("id")
+        document_id = str(raw_id) if raw_id is not None else None
+        if document_id:
+            seen_documents.add(document_id)
         for sale in _iter_sale_lines(record):
             if product_id and (
                 sale.product_id != product_id and sale.product_code != product_id
             ):
                 continue
             sales.append(sale)
+
+    if len(sales) < limit:
+        fallback_records = repo.search_records("documents", limit=limit)
+        for record in fallback_records:
+            raw_id = record.get("id")
+            document_id = str(raw_id) if raw_id is not None else None
+            if document_id and document_id in seen_documents:
+                continue
+
+            registry_type = _extract_registry_type(record)
+            document_type = _extract_document_type(record)
+            if registry_type and registry_type not in _SALE_REGISTRY_TYPES:
+                continue
+            if not registry_type:
+                if not document_type or document_type not in _SALE_DOCUMENT_TYPES:
+                    continue
+
+            for sale in _iter_sale_lines(record):
+                if product_id and (
+                    sale.product_id != product_id and sale.product_code != product_id
+                ):
+                    continue
+                sales.append(sale)
     return sales
 
 
