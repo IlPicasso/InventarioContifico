@@ -40,11 +40,10 @@ descarga de todos los catálogos disponibles en la API pública de Contífico y 
 en la base SQLite configurada. Se incluyen los módulos de inventario (categorías, marcas,
 variantes, productos, bodegas, guías de remisión y movimientos), los documentos del registro
 (`GET /registro/documento/` para ventas y compras), el catálogo general de documentos (`GET
-/documento/`), las transacciones (`GET /registro/transaccion/`), las personas (`GET /persona/`), los
-componentes contables (`GET /contabilidad/centro-costo/`, `GET /contabilidad/cuenta-contable/`, `GET
-/contabilidad/asiento/`) y los servicios bancarios (`GET /banco/cuenta/`, `GET /banco/movimiento/`).
-Opcionalmente puedes indicar un punto de partida (`since`) usando el selector de fecha/hora para
-restringir la importación a cambios recientes.
+/documento/`), las transacciones (`GET /registro/transaccion/`), las personas (`GET /persona/`) y los
+centros de costo (`GET /contabilidad/centro-costo/`). Opcionalmente puedes indicar un punto de
+partida (`since`) usando el selector de fecha/hora para restringir la importación a cambios
+recientes.
 
 Para grandes volúmenes de información la sincronización se realiza en lotes: el cliente solicita
 páginas al API (`CONTIFICO_PAGE_SIZE`) y la capa de persistencia agrupa los registros recibidos
@@ -95,8 +94,8 @@ generó la respuesta de error de la API.
 El repositorio crea automáticamente un archivo SQLite con una tabla por endpoint sincronizado:
 `categories`, `brands`, `variants`, `products`, `warehouses`, `inventory_movements`,
 `remission_guides`, `purchases`, `sales`, `documents`, `registry_transactions`, `persons`,
-`cost_centers`, `journal_entries`, `bank_accounts`, `bank_movements` y la
-tabla auxiliar `sync_state` para almacenar la última ejecución por recurso. Cada registro incluye la
+`cost_centers` y la tabla auxiliar `sync_state` para almacenar la última ejecución por recurso.
+Cada registro incluye la
 versión completa del JSON devuelto por la API, marcas de actualización (`updated_at`,
 `fecha_modificacion`, `fecha`, etc.) y de captura (`fetched_at`).
 

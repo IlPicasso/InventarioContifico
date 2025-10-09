@@ -57,15 +57,6 @@ ENDPOINTS: Dict[str, ResourceFetcher] = {
     "cost_centers": lambda client, since, page_size: client.iter_cost_centers(
         updated_since=since, page_size=page_size
     ),
-    "journal_entries": lambda client, since, page_size: client.iter_journal_entries(
-        updated_since=since, page_size=page_size
-    ),
-    "bank_accounts": lambda client, since, page_size: client.iter_bank_accounts(
-        updated_since=since, page_size=page_size
-    ),
-    "bank_movements": lambda client, since, page_size: client.iter_bank_movements(
-        updated_since=since, page_size=page_size
-    ),
 }
 
 
