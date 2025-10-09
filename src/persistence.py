@@ -106,13 +106,6 @@ CREATE TABLE IF NOT EXISTS cost_centers (
     fetched_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS chart_of_accounts (
-    id TEXT PRIMARY KEY,
-    data TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    fetched_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS journal_entries (
     id TEXT PRIMARY KEY,
     data TEXT NOT NULL,
@@ -153,7 +146,6 @@ class InventoryRepository:
         "registry_transactions",
         "persons",
         "cost_centers",
-        "chart_of_accounts",
         "journal_entries",
         "bank_accounts",
         "bank_movements",

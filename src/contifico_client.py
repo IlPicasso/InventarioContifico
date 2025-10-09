@@ -491,29 +491,6 @@ class ContificoClient:
             legacy_aliases=False,
         )
 
-    def iter_chart_of_accounts(
-        self,
-        *,
-        updated_since: Optional[datetime] = None,
-        page_size: int | None = None,
-    ) -> Iterable[Dict[str, Any]]:
-        """Yield accounting chart of accounts entries."""
-
-        # ``cuenta-contable`` tarda en responder cuando le pedimos páginas muy
-        # grandes, lo que termina provocando ``ReadTimeout`` en la capa HTTP.
-        # Limitar el tamaño a 100 mantiene la respuesta dentro del timeout
-        # predeterminado de 30 segundos sin sacrificar compatibilidad.
-        return self._iterate_endpoint(
-            "contabilidad/cuenta-contable/",
-            updated_since=updated_since,
-            page_size=page_size,
-            # ``cuenta-contable`` ignora ``page``/``page_size`` y solo respeta los alias
-            # históricos ``result_*``. Si no los enviamos, Contífico devuelve siempre la
-            # primera página, lo que provoca un loop infinito cuando tenemos más datos.
-            legacy_aliases=True,
-            page_size_cap=100,
-        )
-
     def iter_journal_entries(
         self,
         *,

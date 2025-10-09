@@ -68,7 +68,6 @@ RESOURCE_LABEL_OVERRIDES = {
     "registry_transactions": "Transacciones de Registro",
     "persons": "Personas",
     "cost_centers": "Centros de Costo",
-    "chart_of_accounts": "Plan de Cuentas",
     "journal_entries": "Asientos Contables",
     "bank_accounts": "Cuentas Bancarias",
     "bank_movements": "Movimientos Bancarios",

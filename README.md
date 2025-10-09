@@ -95,7 +95,7 @@ generó la respuesta de error de la API.
 El repositorio crea automáticamente un archivo SQLite con una tabla por endpoint sincronizado:
 `categories`, `brands`, `variants`, `products`, `warehouses`, `inventory_movements`,
 `remission_guides`, `purchases`, `sales`, `documents`, `registry_transactions`, `persons`,
-`cost_centers`, `chart_of_accounts`, `journal_entries`, `bank_accounts`, `bank_movements` y la
+`cost_centers`, `journal_entries`, `bank_accounts`, `bank_movements` y la
 tabla auxiliar `sync_state` para almacenar la última ejecución por recurso. Cada registro incluye la
 versión completa del JSON devuelto por la API, marcas de actualización (`updated_at`,
 `fecha_modificacion`, `fecha`, etc.) y de captura (`fetched_at`).
