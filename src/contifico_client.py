@@ -251,6 +251,39 @@ class ContificoClient:
                 break
             page += 1
 
+    def _iterate_endpoint_candidates(
+        self,
+        endpoints: Iterable[str],
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Iterate through a sequence of endpoints using the first one that works."""
+
+        last_error: ContificoAPIError | None = None
+        for endpoint in endpoints:
+            try:
+                yield from self._iterate_endpoint(
+                    endpoint,
+                    updated_since=updated_since,
+                    page_size=page_size,
+                    extra_params=extra_params,
+                )
+                return
+            except ContificoAPIError as exc:
+                if exc.status_code != 404:
+                    raise
+                logger.debug(
+                    "Endpoint %s devolvió 404, intentando alternativa",
+                    endpoint,
+                )
+                last_error = exc
+                continue
+
+        if last_error is not None:
+            raise last_error
+
     def iter_products(
         self,
         *,
@@ -273,8 +306,8 @@ class ContificoClient:
     ) -> Iterable[Dict[str, Any]]:
         """Yield purchase documents registered in Contífico."""
 
-        return self._iterate_endpoint(
-            "compra/",
+        return self._iterate_endpoint_candidates(
+            ("documento/compra/", "compra/"),
             updated_since=updated_since,
             page_size=page_size,
         )
@@ -287,8 +320,8 @@ class ContificoClient:
     ) -> Iterable[Dict[str, Any]]:
         """Yield sales documents registered in Contífico."""
 
-        return self._iterate_endpoint(
-            "venta/",
+        return self._iterate_endpoint_candidates(
+            ("documento/venta/", "venta/"),
             updated_since=updated_since,
             page_size=page_size,
         )
