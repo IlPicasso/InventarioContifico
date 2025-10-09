@@ -37,6 +37,27 @@ def _iso(dt: datetime) -> str:
 @pytest.fixture()
 def sample_data(repo: InventoryRepository) -> None:
     repo.upsert_records(
+        "categories",
+        [
+            {"id": "CAT-001", "nombre": "Sastrería"},
+            {"id": "CAT-002", "nombre": "General"},
+        ],
+    )
+
+    repo.upsert_records(
+        "products",
+        [
+            {
+                "id": "PROD-1",
+                "codigo": "SKU-1/54",
+                "nombre": "JACKET XOXO",
+                "categoria_id": "CAT-001",
+                "categoria_nombre": "Sastrería",
+            }
+        ],
+    )
+
+    repo.upsert_records(
         "purchases",
         [
             {
@@ -44,7 +65,11 @@ def sample_data(repo: InventoryRepository) -> None:
                 "fecha_emision": _iso(datetime(2024, 1, 1, 9)),
                 "fecha_recepcion": _iso(datetime(2024, 1, 5, 15)),
                 "detalles": [
-                    {"producto_id": "SKU-1/54", "cantidad": 10},
+                    {
+                        "producto_id": "PROD-1",
+                        "producto_codigo": "SKU-1/54",
+                        "cantidad": 10,
+                    },
                 ],
             },
             {
@@ -59,7 +84,11 @@ def sample_data(repo: InventoryRepository) -> None:
                     }
                 ],
                 "detalles": [
-                    {"producto_id": "SKU-1/54", "cantidad": 8},
+                    {
+                        "producto_id": "PROD-1",
+                        "producto_codigo": "SKU-1/54",
+                        "cantidad": 8,
+                    },
                 ],
             },
         ],
@@ -72,21 +101,33 @@ def sample_data(repo: InventoryRepository) -> None:
                 "id": "SA-1",
                 "fecha_emision": _iso(datetime(2024, 1, 5, 10)),
                 "detalles": [
-                    {"producto_id": "SKU-1/54", "cantidad": 2},
+                    {
+                        "producto_id": "PROD-1",
+                        "producto_codigo": "SKU-1/54",
+                        "cantidad": 2,
+                    },
                 ],
             },
             {
                 "id": "SA-2",
                 "fecha_emision": _iso(datetime(2024, 1, 6, 12)),
                 "detalles": [
-                    {"producto_id": "SKU-1/54", "cantidad": 3},
+                    {
+                        "producto_id": "PROD-1",
+                        "producto_codigo": "SKU-1/54",
+                        "cantidad": 3,
+                    },
                 ],
             },
             {
                 "id": "SA-3",
                 "fecha_emision": _iso(datetime(2024, 1, 15, 16)),
                 "detalles": [
-                    {"producto_id": "SKU-1/54", "cantidad": 5},
+                    {
+                        "producto_id": "PROD-1",
+                        "producto_codigo": "SKU-1/54",
+                        "cantidad": 5,
+                    },
                 ],
             },
         ],
@@ -97,13 +138,15 @@ def sample_data(repo: InventoryRepository) -> None:
         [
             {
                 "id": "VAR-1",
-                "producto_id": "SKU-1/54",
+                "producto_id": "PROD-1",
+                "codigo": "SKU-1/54",
                 "existencia": 20,
                 "fecha_actualizacion": _iso(datetime(2024, 1, 15, 20)),
             },
             {
                 "id": "VAR-2",
-                "producto_id": "SKU-1/54",
+                "producto_id": "PROD-1",
+                "codigo": "SKU-1/54",
                 "existencia": 12,
                 "fecha_actualizacion": _iso(datetime(2024, 1, 16, 8)),
             },
@@ -118,6 +161,7 @@ def test_loaders_build_domain_models(repo: InventoryRepository, sample_data: Non
 
     assert len(purchases) == 2
     assert purchases[0].product_id == "SKU-1/54"
+    assert purchases[0].source_product_id == "PROD-1"
     assert purchases[0].product_code == "SKU-1"
     assert purchases[0].variant_size == "54"
     assert purchases[0].lead_time is not None
@@ -125,13 +169,18 @@ def test_loaders_build_domain_models(repo: InventoryRepository, sample_data: Non
     assert len(sales) == 3
     assert {sale.quantity for sale in sales} == {2, 3, 5}
     assert sales[0].product_label == "SKU-1 (Talla 54)"
+    assert sales[0].source_product_id == "PROD-1"
 
     assert len(stock_levels) == 2
     assert all(level.product_id == "SKU-1/54" for level in stock_levels)
+    assert all(level.source_product_id == "PROD-1" for level in stock_levels)
 
     base_filtered = load_purchases(repo, product_id="SKU-1")
     assert len(base_filtered) == 2
     assert base_filtered[0].variant_size == "54"
+
+    internal_filtered = load_sales(repo, product_id="PROD-1")
+    assert len(internal_filtered) == 3
 
 
 def test_loaders_fallback_to_documents(repo: InventoryRepository) -> None:
@@ -216,6 +265,10 @@ def test_generate_product_kpis(repo: InventoryRepository, sample_data: None) -> 
     assert report["product_code"] == "SKU-1"
     assert report["variant_size"] == "54"
     assert report["product_label"] == "SKU-1 (Talla 54)"
+    assert report["product_name"] == "JACKET XOXO"
+    assert report["category_id"] == "CAT-001"
+    assert report["category_name"] == "Sastrería"
+    assert report["product_internal_ids"] == ["PROD-1"]
     assert pytest.approx(report["average_lead_time_days"], rel=1e-3) == pytest.approx(98 / 24, rel=1e-3)
     assert pytest.approx(report["sales_velocity_per_day"], rel=1e-3) == pytest.approx(10 / 11, rel=1e-3)
     assert pytest.approx(report["stock_coverage_days"], rel=1e-3) == pytest.approx(32 / (10 / 11), rel=1e-3)
@@ -229,13 +282,15 @@ def test_generate_product_kpis(repo: InventoryRepository, sample_data: None) -> 
     assert len(report["purchases"]) == 2
     assert len(report["sales"]) == 3
     assert len(report["stock_levels"]) == 2
+    assert report["purchases"][0].source_product_id == "PROD-1"
+    assert report["stock_levels"][0].source_product_id == "PROD-1"
 
 
 def test_generate_inventory_report(repo: InventoryRepository, sample_data: None) -> None:
     report = generate_inventory_report(
         repo,
         turnover_period_days=30,
-        safety_stock={"SKU-1/54": 5},
+        safety_stock={"PROD-1": 5},
         low_stock_threshold_days=30,
         excess_stock_threshold_days=30,
     )
@@ -253,20 +308,58 @@ def test_generate_inventory_report(repo: InventoryRepository, sample_data: None)
     assert product_entry["product_code"] == "SKU-1"
     assert product_entry["variant_size"] == "54"
     assert product_entry["product_label"] == "SKU-1 (Talla 54)"
+    assert product_entry["product_name"] == "JACKET XOXO"
+    assert product_entry["category_id"] == "CAT-001"
+    assert product_entry["category_name"] == "Sastrería"
+    assert product_entry["product_internal_ids"] == ["PROD-1"]
+    assert pytest.approx(product_entry["reorder_point"], rel=1e-3) == pytest.approx((10 / 11) * (98 / 24) + 5, rel=1e-3)
     assert product_entry["purchases"][0]["product_id"] == "SKU-1/54"
     assert product_entry["sales"][0]["product_id"] == "SKU-1/54"
 
     rankings = report["rankings"]
     assert rankings["top_selling_products"][0]["product_id"] == "SKU-1/54"
     assert rankings["top_selling_products"][0]["product_label"] == "SKU-1 (Talla 54)"
+    assert rankings["top_selling_products"][0]["category_name"] == "Sastrería"
     assert rankings["top_stock_levels"][0]["product_id"] == "SKU-1/54"
+    assert rankings["top_stock_levels"][0]["product_internal_ids"] == ["PROD-1"]
 
     alerts = report["alerts"]
     assert alerts["low_stock"] == []
     assert alerts["reorder_recommended"] == []
     assert alerts["excess_stock"][0]["product_id"] == "SKU-1/54"
     assert alerts["excess_stock"][0]["product_label"] == "SKU-1 (Talla 54)"
+    assert alerts["excess_stock"][0]["product_name"] == "JACKET XOXO"
     assert alerts["stagnant_stock"] == []
 
     metadata = report["metadata"]
     assert metadata["low_stock_threshold_days"] == 30
+
+
+def test_stock_levels_fallback_to_products(repo: InventoryRepository) -> None:
+    repo.upsert_records(
+        "products",
+        [
+            {
+                "id": "SIM-1",
+                "tipo_producto": "SIM",
+                "cantidad_stock": "12.5",
+                "fecha_actualizacion": _iso(datetime(2024, 2, 1, 10)),
+            },
+            {
+                "id": "SIM-2",
+                "tipo_producto": "SIM",
+                "cantidad_stock": "0",
+                "fecha_modificacion": _iso(datetime(2024, 2, 1, 9)),
+            },
+        ],
+    )
+
+    levels = load_stock_levels(repo)
+    quantities_by_id = {level.product_id: level.quantity for level in levels}
+
+    assert quantities_by_id["SIM-1"] == pytest.approx(12.5)
+    assert quantities_by_id["SIM-2"] == pytest.approx(0.0)
+
+    filtered = load_stock_levels(repo, product_id="SIM-1")
+    assert len(filtered) == 1
+    assert filtered[0].product_id == "SIM-1"
