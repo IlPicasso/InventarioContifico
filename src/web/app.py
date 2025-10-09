@@ -592,26 +592,32 @@ def api_search_resource(
     }
 
 
-@app.get("/api/resource/{resource_slug}/sample")
-def api_sample_resource(
-    resource_slug: str,
-    limit: int = Query(default=5, ge=1, le=25),
+@app.get("/api/resources/sample")
+def api_sample_all_resources(
+    limit: int = Query(default=1, ge=1, le=5),
     repo: InventoryRepository = Depends(get_repository),
 ) -> dict[str, Any]:
-    """Return a small sample of stored records for the requested resource."""
+    """Return a small sample of stored records for every supported resource."""
 
-    try:
-        results = repo.search_records(resource_slug, limit=limit)
-    except ValueError as exc:  # pragma: no cover - defensive
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    resources_payload: list[dict[str, Any]] = []
+    for slug in InventoryRepository.RESOURCES:
+        try:
+            results = repo.search_records(slug, limit=limit)
+        except ValueError as exc:  # pragma: no cover - defensive
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        resources_payload.append(
+            {
+                "resource": slug,
+                "label": RESOURCE_LABELS.get(slug, slug.replace("_", " ").title()),
+                "count": len(results),
+                "results": results,
+            }
+        )
 
     return {
-        "resource": resource_slug,
-        "label": RESOURCE_LABELS.get(
-            resource_slug, resource_slug.replace("_", " ").title()
-        ),
-        "count": len(results),
-        "results": results,
+        "limit": limit,
+        "resources": resources_payload,
     }
 
 

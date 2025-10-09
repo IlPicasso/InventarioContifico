@@ -299,45 +299,47 @@
     sampleCopyButton
   ) {
     const buildSampleText = (payload) => {
-      const { resource, label, results } = payload;
-      const simplified = (results || []).map((item) => ({
-        id: item.id,
-        updated_at: item.updated_at,
-        fetched_at: item.fetched_at,
-        data: item.data,
-      }));
-      const header = `Recurso: ${label || resource} (${resource})`;
-      const countLine = `Muestra (${simplified.length} registro(s))`;
-      const body = JSON.stringify(simplified, null, 2);
-      return `${header}\n${countLine}\n${body}`;
+      const { limit, resources } = payload;
+      const header = `Muestra consolidada (máximo ${limit} registro(s) por módulo)`;
+      const sections = (resources || []).map((entry) => {
+        const { resource, label, count, results } = entry;
+        const simplified = (results || []).map((item) => ({
+          id: item.id,
+          updated_at: item.updated_at,
+          fetched_at: item.fetched_at,
+          data: item.data,
+        }));
+        const sectionHeader = `Recurso: ${label || resource} (${resource})`;
+        const countLine = `Registros en muestra: ${count}`;
+        const body =
+          simplified.length > 0
+            ? JSON.stringify(simplified, null, 2)
+            : 'Sin datos disponibles.';
+        return `${sectionHeader}\n${countLine}\n${body}`;
+      });
+      return [header, ...sections].join('\n\n');
     };
 
     sampleButton.addEventListener('click', async () => {
-      const formData = new FormData(lookupForm);
-      const resource = formData.get('resource');
-      if (!resource) {
-        sampleStatus.textContent = 'Selecciona un recurso para obtener la muestra.';
-        sampleOutput.hidden = true;
-        sampleTextarea.value = '';
-        return;
-      }
-
       sampleStatus.textContent = 'Generando muestra…';
       sampleOutput.hidden = true;
       sampleTextarea.value = '';
 
       try {
-        const response = await fetch(
-          `/api/resource/${encodeURIComponent(resource)}/sample`
-        );
+        const response = await fetch('/api/resources/sample');
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
           throw new Error(error.detail || 'No se pudo generar la muestra');
         }
         const payload = await response.json();
-        const { results } = payload;
-        if (!results || results.length === 0) {
-          sampleStatus.textContent = 'Todavía no hay registros sincronizados para este recurso.';
+        const { resources } = payload;
+        const total = (resources || []).reduce(
+          (acc, entry) => acc + (entry?.count || 0),
+          0
+        );
+        if (!total) {
+          sampleStatus.textContent =
+            'Todavía no hay registros sincronizados para generar la muestra consolidada.';
           return;
         }
 
