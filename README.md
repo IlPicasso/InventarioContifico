@@ -36,19 +36,25 @@ Las variables se cargan automáticamente mediante [`python-dotenv`](https://gith
 ## Sincronización de datos
 
 La plataforma web expone un botón de **"Sincronizar ahora"** que lanza, en segundo plano, la
-descarga de productos, compras, ventas, movimientos de inventario y bodegas desde la API de
-Contífico y guarda los resultados en la base SQLite configurada. Los recursos corresponden a los
-endpoints documentados en <https://contifico.github.io/>: productos (`GET /producto/`), bodegas
-(`GET /bodega/`), movimientos de inventario (`GET /movimiento-inventario/`) y documentos del
-registro (`GET /registro/documento/`) filtrados por `tipo` (`FAC` para facturas y `LQC` para
-liquidaciones de compra) y `tipo_registro` (`CLI` para clientes, `PRO` para proveedores). Opcionalmente
-puedes indicar un punto de partida (`since`) usando el selector de fecha/hora para restringir la
-importación a cambios recientes.
+descarga de todos los catálogos disponibles en la API pública de Contífico y guarda los resultados
+en la base SQLite configurada. Se incluyen los módulos de inventario (categorías, marcas,
+variantes, productos, bodegas, guías de remisión y movimientos), los documentos del registro
+(`GET /registro/documento/` para ventas y compras), el catálogo general de documentos (`GET
+/documento/`), las transacciones (`GET /registro/transaccion/`), las personas (`GET /persona/`), los
+componentes contables (`GET /contabilidad/centro-costo/`, `GET /contabilidad/cuenta-contable/`, `GET
+/contabilidad/asiento/`) y los servicios bancarios (`GET /banco/cuenta/`, `GET /banco/movimiento/`).
+Opcionalmente puedes indicar un punto de partida (`since`) usando el selector de fecha/hora para
+restringir la importación a cambios recientes.
 
 Para grandes volúmenes de información la sincronización se realiza en lotes: el cliente solicita
 páginas al API (`CONTIFICO_PAGE_SIZE`) y la capa de persistencia agrupa los registros recibidos
 (`SYNC_BATCH_SIZE`) antes de confirmarlos en disco. Así evitamos saturar memoria al descargar todos
 los movimientos y documentos históricos.
+
+El catálogo de plan de cuentas (`GET /contabilidad/cuenta-contable/`) responde con mayor lentitud
+cuando se solicitan páginas muy grandes, por lo que el cliente impone un límite máximo de 100
+registros por solicitud para prevenir *timeouts*. Si indicas un `--page-size` o `CONTIFICO_PAGE_SIZE`
+mayor, ese valor se recortará automáticamente al umbral permitido para este recurso específico.
 
 Desde el formulario web puedes elegir **qué módulos sincronizar** (deja las casillas vacías para
 traer todo) y activar un modo de **descarga completa** que ignora el historial guardado para volver a
@@ -86,11 +92,13 @@ generó la respuesta de error de la API.
 
 ### Esquema de la base de datos
 
-El repositorio crea automáticamente un archivo SQLite con las tablas `products`, `purchases`,
-`sales`, `warehouses`, `inventory_movements` y la tabla auxiliar `sync_state` para almacenar la
-última ejecución por endpoint. Cada registro incluye la versión completa del JSON devuelto por la
-API, marcas de actualización (`updated_at`, `fecha_modificacion`, `fecha`, etc.) y de captura
-(`fetched_at`).
+El repositorio crea automáticamente un archivo SQLite con una tabla por endpoint sincronizado:
+`categories`, `brands`, `variants`, `products`, `warehouses`, `inventory_movements`,
+`remission_guides`, `purchases`, `sales`, `documents`, `registry_transactions`, `persons`,
+`cost_centers`, `journal_entries`, `bank_accounts`, `bank_movements` y la
+tabla auxiliar `sync_state` para almacenar la última ejecución por recurso. Cada registro incluye la
+versión completa del JSON devuelto por la API, marcas de actualización (`updated_at`,
+`fecha_modificacion`, `fecha`, etc.) y de captura (`fetched_at`).
 
 ## Estructura del proyecto
 
