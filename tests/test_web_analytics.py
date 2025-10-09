@@ -37,7 +37,7 @@ def populated_repo(tmp_path: Path) -> InventoryRepository:
                 "fecha_emision": _iso(datetime(2024, 1, 1, 9)),
                 "fecha_recepcion": _iso(datetime(2024, 1, 5, 15)),
                 "detalles": [
-                    {"producto_id": "SKU-1", "cantidad": 10},
+                    {"producto_id": "SKU-1/54", "cantidad": 10},
                 ],
             },
             {
@@ -47,12 +47,12 @@ def populated_repo(tmp_path: Path) -> InventoryRepository:
                     {
                         "fecha": _iso(datetime(2024, 1, 14, 10)),
                         "detalles": [
-                            {"producto_id": "SKU-1", "cantidad": 8},
+                            {"producto_id": "SKU-1/54", "cantidad": 8},
                         ],
                     }
                 ],
                 "detalles": [
-                    {"producto_id": "SKU-1", "cantidad": 8},
+                    {"producto_id": "SKU-1/54", "cantidad": 8},
                 ],
             },
         ],
@@ -64,21 +64,21 @@ def populated_repo(tmp_path: Path) -> InventoryRepository:
                 "id": "SA-1",
                 "fecha_emision": _iso(datetime(2024, 1, 5, 10)),
                 "detalles": [
-                    {"producto_id": "SKU-1", "cantidad": 2},
+                    {"producto_id": "SKU-1/54", "cantidad": 2},
                 ],
             },
             {
                 "id": "SA-2",
                 "fecha_emision": _iso(datetime(2024, 1, 6, 12)),
                 "detalles": [
-                    {"producto_id": "SKU-1", "cantidad": 3},
+                    {"producto_id": "SKU-1/54", "cantidad": 3},
                 ],
             },
             {
                 "id": "SA-3",
                 "fecha_emision": _iso(datetime(2024, 1, 15, 16)),
                 "detalles": [
-                    {"producto_id": "SKU-1", "cantidad": 5},
+                    {"producto_id": "SKU-1/54", "cantidad": 5},
                 ],
             },
         ],
@@ -88,13 +88,13 @@ def populated_repo(tmp_path: Path) -> InventoryRepository:
         [
             {
                 "id": "VAR-1",
-                "producto_id": "SKU-1",
+                "producto_id": "SKU-1/54",
                 "existencia": 20,
                 "fecha_actualizacion": _iso(datetime(2024, 1, 15, 20)),
             },
             {
                 "id": "VAR-2",
-                "producto_id": "SKU-1",
+                "producto_id": "SKU-1/54",
                 "existencia": 12,
                 "fecha_actualizacion": _iso(datetime(2024, 1, 16, 8)),
             },
@@ -118,7 +118,7 @@ def test_analytics_dashboard_renders_metrics(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert "KPIs accionables" in response.text
-    assert "SKU-1" in response.text
+    assert "SKU-1 (Talla 54)" in response.text
     assert "Descargar reporte en PDF" in response.text
 
 

@@ -234,7 +234,7 @@ def _build_inventory_pdf(report: dict[str, Any], params: dict[str, Any]) -> Byte
             "Productos más vendidos",
             ["Producto", "Unidades", "Velocidad/día"],
             lambda item: [
-                item.get("product_id", "-"),
+                item.get("product_label", item.get("product_id", "-")),
                 _format_metric(item.get("total_sold_units"), decimals=0),
                 _format_metric(item.get("sales_velocity_per_day")),
             ],
@@ -244,7 +244,7 @@ def _build_inventory_pdf(report: dict[str, Any], params: dict[str, Any]) -> Byte
             "Inventario disponible",
             ["Producto", "Unidades", "Cobertura (días)"],
             lambda item: [
-                item.get("product_id", "-"),
+                item.get("product_label", item.get("product_id", "-")),
                 _format_metric(item.get("current_stock_units"), decimals=0),
                 _format_metric(item.get("stock_coverage_days")),
             ],
@@ -254,7 +254,7 @@ def _build_inventory_pdf(report: dict[str, Any], params: dict[str, Any]) -> Byte
             "Mayor rotación",
             ["Producto", "Rotación"],
             lambda item: [
-                item.get("product_id", "-"),
+                item.get("product_label", item.get("product_id", "-")),
                 _format_metric(item.get("inventory_turnover")),
             ],
         ),
@@ -263,7 +263,7 @@ def _build_inventory_pdf(report: dict[str, Any], params: dict[str, Any]) -> Byte
             "Mayores lead times",
             ["Producto", "Lead time (días)"],
             lambda item: [
-                item.get("product_id", "-"),
+                item.get("product_label", item.get("product_id", "-")),
                 _format_metric(item.get("average_lead_time_days")),
             ],
         ),
@@ -291,7 +291,7 @@ def _build_inventory_pdf(report: dict[str, Any], params: dict[str, Any]) -> Byte
     for product in report.get("products", [])[: params.get("top_n", DEFAULT_TOP_N)]:
         product_rows.append(
             [
-                product.get("product_id", "-"),
+                product.get("product_label", product.get("product_id", "-")),
                 _format_metric(product.get("sales_velocity_per_day")),
                 _format_metric(product.get("stock_coverage_days")),
                 _format_metric(product.get("inventory_turnover")),
@@ -330,7 +330,7 @@ def _build_inventory_pdf(report: dict[str, Any], params: dict[str, Any]) -> Byte
                     )
                 story.append(
                     Paragraph(
-                        f"&bull; Producto {entry.get('product_id', '-')}: "
+                        f"&bull; Producto {entry.get('product_label', entry.get('product_id', '-'))}: "
                         + (", ".join(details) or "sin datos adicionales"),
                         body,
                     )

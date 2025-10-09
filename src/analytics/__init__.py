@@ -14,6 +14,7 @@ from .sales_velocity import (
     calculate_sales_velocity,
     calculate_stock_coverage,
 )
+from .sku import format_variant_label, split_sku_and_size
 
 __all__ = [
     "average_lead_time",
@@ -29,4 +30,6 @@ __all__ = [
     "Purchase",
     "Sale",
     "StockLevel",
+    "split_sku_and_size",
+    "format_variant_label",
 ]
