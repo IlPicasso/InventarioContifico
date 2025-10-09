@@ -192,21 +192,27 @@ class ContificoClient:
         updated_since: Optional[datetime] = None,
         page_size: int | None = None,
         extra_params: Optional[Dict[str, Any]] = None,
+        legacy_aliases: bool = True,
     ) -> Iterator[Dict[str, Any]]:
         size = page_size or self.default_page_size
+        base_params: Dict[str, Any] = {}
+        if updated_since is not None:
+            base_params["fecha_modificacion__gte"] = updated_since.isoformat()
+        if extra_params:
+            base_params.update(extra_params)
+
         page = 1
         while True:
             params: Dict[str, Any] = {
                 "page": page,
                 "page_size": size,
-                # Algunos despliegues siguen usando los alias históricos.
-                "result_page": page,
-                "result_size": size,
             }
-            if updated_since is not None:
-                params["fecha_modificacion__gte"] = updated_since.isoformat()
-            if extra_params:
-                params.update(extra_params)
+            if legacy_aliases:
+                # Algunos despliegues siguen usando los alias históricos ``result_*``.
+                params["result_page"] = page
+                params["result_size"] = size
+            if base_params:
+                params.update(base_params)
 
             payload = self._request("GET", endpoint, params=params)
             if payload is None:
@@ -380,4 +386,5 @@ class ContificoClient:
             "movimiento-inventario/",
             updated_since=updated_since,
             page_size=page_size,
+            legacy_aliases=False,
         )
