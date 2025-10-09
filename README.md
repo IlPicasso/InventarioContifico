@@ -37,9 +37,13 @@ Las variables se cargan automáticamente mediante [`python-dotenv`](https://gith
 
 La plataforma web expone un botón de **"Sincronizar ahora"** que lanza, en segundo plano, la
 descarga de productos, compras, ventas, movimientos de inventario y bodegas desde la API de
-Contífico y guarda los resultados en la base SQLite configurada. Opcionalmente puedes indicar un
-punto de partida (`since`) usando el selector de fecha/hora para restringir la importación a cambios
-recientes.
+Contífico y guarda los resultados en la base SQLite configurada. Los recursos corresponden a los
+endpoints documentados en <https://contifico.github.io/>: productos (`GET /producto/`), bodegas
+(`GET /bodega/`), movimientos de inventario (`GET /movimiento-inventario/`) y documentos del
+registro (`GET /registro/documento/`) filtrados por `tipo` (`FAC` para facturas y `LQC` para
+liquidaciones de compra) y `tipo_registro` (`CLI` para clientes, `PRO` para proveedores). Opcionalmente
+puedes indicar un punto de partida (`since`) usando el selector de fecha/hora para restringir la
+importación a cambios recientes.
 
 Para grandes volúmenes de información la sincronización se realiza en lotes: el cliente solicita
 páginas al API (`CONTIFICO_PAGE_SIZE`) y la capa de persistencia agrupa los registros recibidos
