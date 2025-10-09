@@ -43,6 +43,14 @@ _STOCK_DATETIME_FIELDS = (
 )
 
 
+_LATIN_DATE_FORMATS = (
+    "%d/%m/%Y %H:%M:%S",
+    "%d/%m/%Y %H:%M",
+    "%d/%m/%Y %H:%M:%S.%f",
+    "%d/%m/%Y",
+)
+
+
 def _parse_datetime(value: str | datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -55,7 +63,12 @@ def _parse_datetime(value: str | datetime | None) -> datetime | None:
     try:
         return datetime.fromisoformat(text)
     except ValueError:
-        return None
+        for fmt in _LATIN_DATE_FORMATS:
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+    return None
 
 
 def _parse_float(value: object, default: float = 0.0) -> float:
@@ -70,6 +83,16 @@ def _normalise_code(value: object | None) -> str:
         return ""
     text = str(value).strip()
     return text.upper()
+
+
+def _first_non_empty(source: dict, keys: Sequence[str]) -> str | None:
+    for key in keys:
+        if key not in source or source[key] is None:
+            continue
+        text = str(source[key]).strip()
+        if text:
+            return text
+    return None
 
 
 def _extract_from_payload(record: dict, *candidates: str) -> object | None:
@@ -113,19 +136,34 @@ def _iter_purchase_lines(record: dict) -> Iterator[Purchase]:
     supplier_id = data.get("proveedor_id") or data.get("supplier_id")
 
     for line in lines:
-        product_id = (
-            line.get("producto_id")
-            or line.get("product_id")
-            or line.get("variant_id")
-            or data.get("producto_id")
-            or data.get("product_id")
-        )
-        if not product_id:
+        raw_product_id = _first_non_empty(
+            line,
+            ("producto_id", "product_id", "variant_id"),
+        ) or _first_non_empty(data, ("producto_id", "product_id"))
+        product_code = _first_non_empty(
+            line,
+            ("producto_codigo", "codigo", "product_code", "sku"),
+        ) or _first_non_empty(data, ("producto_codigo", "codigo", "product_code", "sku"))
+
+        product_identifier = product_code or raw_product_id
+        if not product_identifier:
             continue
         receipt = _extract_first_datetime(line, _RECEIPT_FIELDS)
         if not receipt:
             receipt = _extract_first_datetime(data, _RECEIPT_FIELDS)
         if not receipt and receptions:
+            reference_candidates = {
+                str(value).strip()
+                for value in (
+                    raw_product_id,
+                    product_identifier,
+                    line.get("producto_codigo")
+                    or line.get("codigo")
+                    or line.get("product_code")
+                    or line.get("sku"),
+                )
+                if value
+            }
             for reception in receptions:
                 reception_date = _parse_datetime(
                     reception.get("fecha")
@@ -137,8 +175,15 @@ def _iter_purchase_lines(record: dict) -> Iterator[Purchase]:
                         detail.get("producto_id")
                         or detail.get("product_id")
                         or detail.get("variant_id")
+                        or detail.get("producto_codigo")
+                        or detail.get("codigo")
+                        or detail.get("product_code")
+                        or detail.get("sku")
                     )
-                    if detail_product and str(detail_product) == str(product_id):
+                    if (
+                        detail_product
+                        and str(detail_product).strip() in reference_candidates
+                    ):
                         receipt = reception_date
                         break
                 if receipt:
@@ -153,7 +198,8 @@ def _iter_purchase_lines(record: dict) -> Iterator[Purchase]:
         )
         yield Purchase(
             purchase_id=str(record.get("id")),
-            product_id=str(product_id),
+            product_id=str(product_identifier),
+            source_product_id=str(raw_product_id) if raw_product_id else None,
             ordered_at=ordered_at,
             received_at=receipt,
             quantity=max(quantity, 0.0),
@@ -182,6 +228,7 @@ def load_purchases(
             if product_id and (
                 purchase.product_id != product_id
                 and purchase.product_code != product_id
+                and purchase.source_product_id != product_id
             ):
                 continue
             purchases.append(purchase)
@@ -206,6 +253,7 @@ def load_purchases(
                 if product_id and (
                     purchase.product_id != product_id
                     and purchase.product_code != product_id
+                    and purchase.source_product_id != product_id
                 ):
                     continue
                 purchases.append(purchase)
@@ -222,14 +270,17 @@ def _iter_sale_lines(record: dict) -> Iterator[Sale]:
     warehouse_id = data.get("bodega_id") or data.get("warehouse_id")
     customer_id = data.get("cliente_id") or data.get("customer_id")
     for line in lines:
-        product_id = (
-            line.get("producto_id")
-            or line.get("product_id")
-            or line.get("variant_id")
-            or data.get("producto_id")
-            or data.get("product_id")
-        )
-        if not product_id:
+        raw_product_id = _first_non_empty(
+            line,
+            ("producto_id", "product_id", "variant_id"),
+        ) or _first_non_empty(data, ("producto_id", "product_id"))
+        product_code = _first_non_empty(
+            line,
+            ("producto_codigo", "codigo", "product_code", "sku"),
+        ) or _first_non_empty(data, ("producto_codigo", "codigo", "product_code", "sku"))
+
+        product_identifier = product_code or raw_product_id
+        if not product_identifier:
             continue
         quantity = _parse_float(
             line.get("cantidad")
@@ -241,7 +292,8 @@ def _iter_sale_lines(record: dict) -> Iterator[Sale]:
         )
         yield Sale(
             sale_id=str(record.get("id")),
-            product_id=str(product_id),
+            product_id=str(product_identifier),
+            source_product_id=str(raw_product_id) if raw_product_id else None,
             sold_at=sold_at,
             quantity=max(quantity, 0.0),
             warehouse_id=str(warehouse_id) if warehouse_id else None,
@@ -268,6 +320,7 @@ def load_sales(
         for sale in _iter_sale_lines(record):
             if product_id and (
                 sale.product_id != product_id and sale.product_code != product_id
+                and sale.source_product_id != product_id
             ):
                 continue
             sales.append(sale)
@@ -291,6 +344,7 @@ def load_sales(
             for sale in _iter_sale_lines(record):
                 if product_id and (
                     sale.product_id != product_id and sale.product_code != product_id
+                    and sale.source_product_id != product_id
                 ):
                     continue
                 sales.append(sale)
@@ -299,13 +353,13 @@ def load_sales(
 
 def _iter_stock_levels(record: dict) -> Iterator[StockLevel]:
     data = record.get("data") or {}
-    product_id = (
-        data.get("producto_id")
-        or data.get("product_id")
-        or data.get("id")
-        or record.get("id")
-    )
-    if not product_id:
+    raw_product_id = _first_non_empty(
+        data,
+        ("producto_id", "product_id", "variant_id", "id"),
+    ) or _first_non_empty(record, ("producto_id", "product_id", "id"))
+    product_code = _first_non_empty(data, ("codigo", "product_code", "sku"))
+    product_identifier = product_code or raw_product_id
+    if not product_identifier:
         return iter(())
     warehouse_id = data.get("bodega_id") or data.get("warehouse_id")
     as_of = _extract_first_datetime(data, _STOCK_DATETIME_FIELDS)
@@ -316,10 +370,15 @@ def _iter_stock_levels(record: dict) -> Iterator[StockLevel]:
         or data.get("stock")
         or data.get("cantidad")
         or data.get("quantity")
+        or data.get("cantidad_stock")
+        or data.get("stock_total")
+        or data.get("saldo")
+        or data.get("existencia_total")
         or 0,
     )
     yield StockLevel(
-        product_id=str(product_id),
+        product_id=str(product_identifier),
+        source_product_id=str(raw_product_id) if raw_product_id else None,
         quantity=max(quantity, 0.0),
         as_of=as_of or datetime.utcnow(),
         warehouse_id=str(warehouse_id) if warehouse_id else None,
@@ -336,13 +395,34 @@ def load_stock_levels(
 
     records = repo.search_records("variants", limit=limit)
     stock_levels: list[StockLevel] = []
+    seen_products: set[str] = set()
     for record in records:
         for stock in _iter_stock_levels(record):
             if product_id and (
                 stock.product_id != product_id and stock.product_code != product_id
+                and stock.source_product_id != product_id
             ):
                 continue
             stock_levels.append(stock)
+            seen_products.add(stock.product_id)
+
+    # Algunos catálogos sólo informan inventario a nivel de producto simple en el
+    # endpoint de ``products``. Cuando no existen variantes sincronizadas (o el
+    # inventario aún no se ha actualizado allí) usamos esos valores para no
+    # perder visibilidad del stock disponible.
+    if len(stock_levels) < limit:
+        product_records = repo.search_records("products", limit=limit)
+        for record in product_records:
+            for stock in _iter_stock_levels(record):
+                if stock.product_id in seen_products:
+                    continue
+                if product_id and (
+                    stock.product_id != product_id and stock.product_code != product_id
+                    and stock.source_product_id != product_id
+                ):
+                    continue
+                stock_levels.append(stock)
+                seen_products.add(stock.product_id)
     return stock_levels
 
 

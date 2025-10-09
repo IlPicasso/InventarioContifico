@@ -14,6 +14,12 @@ class Purchase(BaseModel):
 
     purchase_id: str = Field(..., description="Identificador único del documento de compra")
     product_id: str = Field(..., description="Identificador del producto o variante comprada")
+    source_product_id: str | None = Field(
+        None,
+        description=(
+            "Identificador original del producto en Contifico cuando difiere del código"
+        ),
+    )
     ordered_at: datetime = Field(..., description="Fecha en la que se emitió la orden de compra")
     received_at: datetime | None = Field(
         None, description="Fecha en la que el producto fue recibido"
@@ -32,6 +38,13 @@ class Purchase(BaseModel):
         """Normaliza los campos de texto eliminando espacios en blanco."""
 
         return value.strip()
+
+    @field_validator("source_product_id", mode="before")
+    @classmethod
+    def _strip_optional(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return value.strip() or None
 
     @property
     def lead_time(self) -> timedelta | None:
@@ -69,6 +82,10 @@ class Sale(BaseModel):
 
     sale_id: str = Field(..., description="Identificador del documento de venta")
     product_id: str = Field(..., description="Producto vendido")
+    source_product_id: str | None = Field(
+        None,
+        description="Identificador original del producto en Contifico para la línea de venta",
+    )
     sold_at: datetime = Field(..., description="Fecha de la transacción")
     quantity: float = Field(..., ge=0, description="Cantidad vendida en unidades")
     warehouse_id: str | None = Field(None, description="Bodega de despacho")
@@ -78,6 +95,13 @@ class Sale(BaseModel):
     @classmethod
     def _strip(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("source_product_id", mode="before")
+    @classmethod
+    def _strip_optional(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return value.strip() or None
 
     @property
     def product_code(self) -> str:
@@ -100,6 +124,10 @@ class StockLevel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     product_id: str = Field(..., description="Producto asociado al inventario")
+    source_product_id: str | None = Field(
+        None,
+        description="Identificador original del producto usado en el origen del inventario",
+    )
     quantity: float = Field(..., ge=0, description="Cantidad disponible")
     as_of: datetime = Field(..., description="Fecha de corte de la medición")
     warehouse_id: str | None = Field(None, description="Bodega a la que pertenece la existencia")
@@ -108,6 +136,13 @@ class StockLevel(BaseModel):
     @classmethod
     def _strip(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("source_product_id", mode="before")
+    @classmethod
+    def _strip_optional(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return value.strip() or None
 
     @property
     def product_code(self) -> str:
