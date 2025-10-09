@@ -54,12 +54,25 @@ app = FastAPI(
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-RESOURCE_LABELS = {
+RESOURCE_LABEL_OVERRIDES = {
+    "categories": "Categorías",
+    "brands": "Marcas",
+    "variants": "Variantes",
     "products": "Productos",
-    "purchases": "Compras",
-    "sales": "Ventas",
     "warehouses": "Bodegas",
     "inventory_movements": "Movimientos de Inventario",
+    "remission_guides": "Guías de Remisión",
+    "purchases": "Compras",
+    "sales": "Ventas",
+    "documents": "Documentos",
+    "registry_transactions": "Transacciones de Registro",
+    "persons": "Personas",
+    "cost_centers": "Centros de Costo",
+}
+
+RESOURCE_LABELS = {
+    slug: RESOURCE_LABEL_OVERRIDES.get(slug, slug.replace("_", " ").title())
+    for slug in InventoryRepository.RESOURCES
 }
 
 UPCOMING_FEATURES = (
