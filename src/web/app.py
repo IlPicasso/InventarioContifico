@@ -60,7 +60,6 @@ RESOURCE_LABEL_OVERRIDES = {
     "variants": "Variantes",
     "products": "Productos",
     "warehouses": "Bodegas",
-    "inventory_movements": "Movimientos de Inventario",
     "remission_guides": "Guías de Remisión",
     "purchases": "Compras",
     "sales": "Ventas",
@@ -78,7 +77,7 @@ RESOURCE_LABELS = {
 UPCOMING_FEATURES = (
     {
         "title": "Indicadores de rotación de inventario",
-        "description": "Análisis de rotación y cobertura utilizando los movimientos sincronizados.",
+        "description": "Análisis de rotación y cobertura basados en catálogos y documentos registrados.",
     },
     {
         "title": "KPIs de ventas",

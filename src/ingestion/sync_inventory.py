@@ -33,9 +33,6 @@ ENDPOINTS: Dict[str, ResourceFetcher] = {
     "warehouses": lambda client, since, page_size: client.iter_warehouses(
         updated_since=since, page_size=page_size
     ),
-    "inventory_movements": lambda client, since, page_size: client.iter_inventory_movements(
-        updated_since=since, page_size=page_size
-    ),
     "remission_guides": lambda client, since, page_size: client.iter_remission_guides(
         updated_since=since, page_size=page_size
     ),

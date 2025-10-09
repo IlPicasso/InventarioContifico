@@ -50,13 +50,6 @@ CREATE TABLE IF NOT EXISTS warehouses (
     fetched_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS inventory_movements (
-    id TEXT PRIMARY KEY,
-    data TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    fetched_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS remission_guides (
     id TEXT PRIMARY KEY,
     data TEXT NOT NULL,
@@ -118,7 +111,6 @@ class InventoryRepository:
         "variants",
         "products",
         "warehouses",
-        "inventory_movements",
         "remission_guides",
         "purchases",
         "sales",
