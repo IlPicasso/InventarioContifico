@@ -278,17 +278,44 @@ class ContificoClient:
                 )
                 return
             except ContificoAPIError as exc:
-                if exc.status_code != 404:
+                if not self._should_retry_endpoint_candidate(exc):
                     raise
                 logger.debug(
-                    "Endpoint %s devolvió 404, intentando alternativa",
+                    "Endpoint %s rechazado (%s), intentando alternativa",
                     endpoint,
+                    exc,
                 )
                 last_error = exc
                 continue
 
         if last_error is not None:
             raise last_error
+
+    @staticmethod
+    def _should_retry_endpoint_candidate(error: ContificoAPIError) -> bool:
+        """Return True if a failed candidate should be retried with the next option."""
+
+        if error.status_code == 404:
+            return True
+
+        if error.status_code == 400:
+            # Algunos despliegues responden ``400 id incorrecto`` cuando el nuevo
+            # endpoint ``documento/`` aún no está disponible para listados. En ese
+            # caso debemos intentar con el alias histórico.
+            message = ""
+            payload = error.payload
+            if isinstance(payload, dict):
+                for key in ("mensaje", "message", "detail"):
+                    value = payload.get(key)
+                    if isinstance(value, str):
+                        message = value
+                        break
+            if not message and isinstance(error.detail, str):
+                message = error.detail
+            if "id incorrecto" in message.lower():
+                return True
+
+        return False
 
     def iter_products(
         self,
