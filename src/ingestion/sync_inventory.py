@@ -18,7 +18,25 @@ logger = logging.getLogger(__name__)
 ResourceFetcher = Callable[[ContificoClient, datetime | None, int | None], Iterable[dict]]
 
 ENDPOINTS: Dict[str, ResourceFetcher] = {
+    "categories": lambda client, since, page_size: client.iter_categories(
+        updated_since=since, page_size=page_size
+    ),
+    "brands": lambda client, since, page_size: client.iter_brands(
+        updated_since=since, page_size=page_size
+    ),
+    "variants": lambda client, since, page_size: client.iter_variants(
+        updated_since=since, page_size=page_size
+    ),
     "products": lambda client, since, page_size: client.iter_products(
+        updated_since=since, page_size=page_size
+    ),
+    "warehouses": lambda client, since, page_size: client.iter_warehouses(
+        updated_since=since, page_size=page_size
+    ),
+    "inventory_movements": lambda client, since, page_size: client.iter_inventory_movements(
+        updated_since=since, page_size=page_size
+    ),
+    "remission_guides": lambda client, since, page_size: client.iter_remission_guides(
         updated_since=since, page_size=page_size
     ),
     "purchases": lambda client, since, page_size: client.iter_purchases(
@@ -27,10 +45,28 @@ ENDPOINTS: Dict[str, ResourceFetcher] = {
     "sales": lambda client, since, page_size: client.iter_sales(
         updated_since=since, page_size=page_size
     ),
-    "warehouses": lambda client, since, page_size: client.iter_warehouses(
+    "documents": lambda client, since, page_size: client.iter_documents_catalog(
         updated_since=since, page_size=page_size
     ),
-    "inventory_movements": lambda client, since, page_size: client.iter_inventory_movements(
+    "registry_transactions": lambda client, since, page_size: client.iter_registry_transactions(
+        updated_since=since, page_size=page_size
+    ),
+    "persons": lambda client, since, page_size: client.iter_persons(
+        updated_since=since, page_size=page_size
+    ),
+    "cost_centers": lambda client, since, page_size: client.iter_cost_centers(
+        updated_since=since, page_size=page_size
+    ),
+    "chart_of_accounts": lambda client, since, page_size: client.iter_chart_of_accounts(
+        updated_since=since, page_size=page_size
+    ),
+    "journal_entries": lambda client, since, page_size: client.iter_journal_entries(
+        updated_since=since, page_size=page_size
+    ),
+    "bank_accounts": lambda client, since, page_size: client.iter_bank_accounts(
+        updated_since=since, page_size=page_size
+    ),
+    "bank_movements": lambda client, since, page_size: client.iter_bank_movements(
         updated_since=since, page_size=page_size
     ),
 }

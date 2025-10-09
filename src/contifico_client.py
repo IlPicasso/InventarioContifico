@@ -193,11 +193,12 @@ class ContificoClient:
         page_size: int | None = None,
         extra_params: Optional[Dict[str, Any]] = None,
         legacy_aliases: bool = True,
+        updated_since_field: str = "fecha_modificacion__gte",
     ) -> Iterator[Dict[str, Any]]:
         size = page_size or self.default_page_size
         base_params: Dict[str, Any] = {}
         if updated_since is not None:
-            base_params["fecha_modificacion__gte"] = updated_since.isoformat()
+            base_params[updated_since_field] = updated_since.isoformat()
         if extra_params:
             base_params.update(extra_params)
 
@@ -352,6 +353,192 @@ class ContificoClient:
 
         return self._iterate_endpoint(
             "movimiento-inventario/",
+            updated_since=updated_since,
+            page_size=page_size,
+            legacy_aliases=False,
+        )
+
+    def iter_categories(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield product category definitions."""
+
+        return self._iterate_endpoint(
+            "categoria/",
+            updated_since=updated_since,
+            page_size=page_size,
+        )
+
+    def iter_variants(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield variant definitions linked to products."""
+
+        return self._iterate_endpoint(
+            "variante/",
+            updated_since=updated_since,
+            page_size=page_size,
+        )
+
+    def iter_brands(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield product brand catalog entries."""
+
+        return self._iterate_endpoint(
+            "marca/",
+            updated_since=updated_since,
+            page_size=page_size,
+        )
+
+    def iter_remission_guides(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield remission guides registered in Contífico."""
+
+        return self._iterate_endpoint(
+            "inventario/guia/",
+            updated_since=updated_since,
+            page_size=page_size,
+            legacy_aliases=False,
+        )
+
+    def iter_documents_catalog(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield transactional documents from the core document endpoint."""
+
+        return self._iterate_endpoint(
+            "documento/",
+            updated_since=updated_since,
+            page_size=page_size,
+            # El endpoint de documentos aún depende de los alias ``result_*``
+            # documentados públicamente; si usamos los nuevos nombres no
+            # respeta la paginación y Contífico termina devolviendo cargas
+            # masivas que agotan el timeout del cliente. Mantener los alias
+            # evita los timeouts observados en producción.
+            legacy_aliases=True,
+            updated_since_field="fecha_emision__gte",
+        )
+
+    def iter_registry_transactions(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield registry transactions associated with documents."""
+
+        return self._iterate_endpoint(
+            "registro/transaccion/",
+            updated_since=updated_since,
+            page_size=page_size,
+            # Igual que el endpoint de documentos, las transacciones de registro
+            # todavía usan ``result_page``/``result_size`` para paginar.
+            legacy_aliases=True,
+        )
+
+    def iter_persons(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield people (clients, providers) registered in Contífico."""
+
+        return self._iterate_endpoint(
+            "persona/",
+            updated_since=updated_since,
+            page_size=page_size,
+            # ``persona`` sigue el mismo esquema legacy de paginación.
+            legacy_aliases=True,
+        )
+
+    def iter_cost_centers(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield accounting cost centers."""
+
+        return self._iterate_endpoint(
+            "contabilidad/centro-costo/",
+            updated_since=updated_since,
+            page_size=page_size,
+            legacy_aliases=False,
+        )
+
+    def iter_chart_of_accounts(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield accounting chart of accounts entries."""
+
+        return self._iterate_endpoint(
+            "contabilidad/cuenta-contable/",
+            updated_since=updated_since,
+            page_size=page_size,
+            legacy_aliases=False,
+        )
+
+    def iter_journal_entries(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield accounting journal entries."""
+
+        return self._iterate_endpoint(
+            "contabilidad/asiento/",
+            updated_since=updated_since,
+            page_size=page_size,
+            legacy_aliases=False,
+        )
+
+    def iter_bank_accounts(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield configured bank accounts."""
+
+        return self._iterate_endpoint(
+            "banco/cuenta/",
+            updated_since=updated_since,
+            page_size=page_size,
+            legacy_aliases=False,
+        )
+
+    def iter_bank_movements(
+        self,
+        *,
+        updated_since: Optional[datetime] = None,
+        page_size: int | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Yield bank movements registered in Contífico."""
+
+        return self._iterate_endpoint(
+            "banco/movimiento/",
             updated_since=updated_since,
             page_size=page_size,
             legacy_aliases=False,

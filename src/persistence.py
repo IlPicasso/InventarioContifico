@@ -15,7 +15,49 @@ CREATE TABLE IF NOT EXISTS sync_state (
     last_synced_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS categories (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS brands (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS variants (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS products (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS warehouses (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS inventory_movements (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS remission_guides (
     id TEXT PRIMARY KEY,
     data TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -36,14 +78,56 @@ CREATE TABLE IF NOT EXISTS sales (
     fetched_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS warehouses (
+CREATE TABLE IF NOT EXISTS documents (
     id TEXT PRIMARY KEY,
     data TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     fetched_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS inventory_movements (
+CREATE TABLE IF NOT EXISTS registry_transactions (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS persons (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS cost_centers (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chart_of_accounts (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS journal_entries (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bank_accounts (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bank_movements (
     id TEXT PRIMARY KEY,
     data TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -56,11 +140,23 @@ class InventoryRepository:
     """Simple SQLite-backed repository for inventory data."""
 
     RESOURCES = (
+        "categories",
+        "brands",
+        "variants",
         "products",
-        "purchases",
-        "sales",
         "warehouses",
         "inventory_movements",
+        "remission_guides",
+        "purchases",
+        "sales",
+        "documents",
+        "registry_transactions",
+        "persons",
+        "cost_centers",
+        "chart_of_accounts",
+        "journal_entries",
+        "bank_accounts",
+        "bank_movements",
     )
 
     def __init__(self, db_path: Path | str) -> None:
