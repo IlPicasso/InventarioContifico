@@ -18,6 +18,7 @@ from pydantic_settings import BaseSettings
 from ..contifico_client import ContificoClient
 from ..ingestion.sync_inventory import synchronise_inventory
 from ..persistence import InventoryRepository
+from ..logging_config import configure_logging
 
 load_dotenv()
 
@@ -37,6 +38,8 @@ class Settings(BaseSettings):
     inventory_db_path: str = "data/inventory.db"
     sync_batch_size: int = 100
     contifico_page_size: int = 200
+    log_level: str = "INFO"
+    log_file: str | None = None
 
     class Config:
         env_file = ".env"
@@ -212,3 +215,11 @@ def api_trigger_sync(
         "full_refresh": full_refresh,
         "page_size": settings.contifico_page_size,
     }
+@app.on_event("startup")
+def configure_app_logging() -> None:
+    """Inicializa el logging global según las variables de entorno."""
+
+    settings = get_settings()
+    configure_logging(settings.log_level, settings.log_file)
+    logger.debug("Logging configurado para la aplicación web")
+

@@ -28,6 +28,8 @@ Herramientas básicas para sincronizar el catálogo de Contifico con un almacén
 | `INVENTORY_DB_PATH` | (Opcional) Ruta al archivo SQLite. Por defecto `data/inventory.db`. |
 | `SYNC_BATCH_SIZE` | (Opcional) Tamaño de lote usado para escritura en base de datos. |
 | `CONTIFICO_PAGE_SIZE` | (Opcional) Registros solicitados por página a la API (por defecto 200). |
+| `LOG_LEVEL` | (Opcional) Nivel de logging (`INFO`, `DEBUG`, etc.) para ver el detalle de las operaciones. |
+| `LOG_FILE` | (Opcional) Ruta de archivo donde persistir los logs además de la consola. |
 
 Las variables se cargan automáticamente mediante [`python-dotenv`](https://github.com/theskumar/python-dotenv).
 
@@ -62,6 +64,21 @@ Si necesitas ejecutar la sincronización fuera del entorno web, el módulo
 `synchronise_inventory` y mantiene la interfaz de línea de comandos como alternativa.
 Los argumentos opcionales permiten seleccionar módulos (`--resources products sales`), forzar un
 recorrido completo (`--full-refresh`) o ajustar el paginado remoto (`--page-size 500`).
+
+### Registro de actividad y diagnósticos
+
+Para auditar las peticiones hechas a Contífico y depurar errores, activa el modo detallado en tu
+archivo `.env`:
+
+```ini
+LOG_LEVEL=DEBUG
+LOG_FILE=logs/contifico.log
+```
+
+Con estos ajustes el sistema registrará cada request y response (incluyendo parámetros y cuerpos
+truncados) tanto en consola como en el archivo indicado. El directorio del archivo se crea de forma
+automática. Revisa el log cuando se produzcan errores de sincronización para identificar qué payload
+generó la respuesta de error de la API.
 
 ### Esquema de la base de datos
 
@@ -132,6 +149,8 @@ sincronizaciones y un roadmap con los próximos análisis a construir.
    User=www-data
    WorkingDirectory=/opt/inventario-contifico
    Environment="PATH=/opt/inventario-contifico/.venv/bin"
+   Environment="LOG_LEVEL=INFO"
+   Environment="LOG_FILE=/opt/inventario-contifico/logs/contifico.log"
    ExecStart=/opt/inventario-contifico/.venv/bin/uvicorn src.web.app:app --host 0.0.0.0 --port 8000
    Restart=on-failure
 
@@ -139,6 +158,7 @@ sincronizaciones y un roadmap con los próximos análisis a construir.
    WantedBy=multi-user.target
    ```
 
+   Crea el directorio de logs (`sudo mkdir -p /opt/inventario-contifico/logs && sudo chown www-data:www-data /opt/inventario-contifico/logs`).
    Aplica los cambios: `sudo systemctl daemon-reload && sudo systemctl enable --now inventario`.
 
 4. **Exponer la aplicación**

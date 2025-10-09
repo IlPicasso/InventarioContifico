@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 
 from ..contifico_client import ContificoClient
 from ..persistence import InventoryRepository, chunked
+from ..logging_config import configure_logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 ResourceFetcher = Callable[[ContificoClient, datetime | None, int | None], Iterable[dict]]
@@ -104,6 +104,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     load_dotenv()
+    configure_logging(os.getenv("LOG_LEVEL", "INFO"), os.getenv("LOG_FILE"))
     args = parse_args()
 
     api_key = os.getenv("CONTIFICO_API_KEY")

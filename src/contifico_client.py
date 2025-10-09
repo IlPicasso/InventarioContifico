@@ -1,6 +1,7 @@
 """Client helpers for interacting with the Contifico API."""
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, Iterable, Iterator, Optional
@@ -8,6 +9,20 @@ from typing import Any, Dict, Iterable, Iterator, Optional
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def _serialise_for_log(data: Any, limit: int = 2000) -> str:
+    """Return a JSON representation of ``data`` truncated for logging."""
+
+    if data is None:
+        return "null"
+    try:
+        rendered = json.dumps(data, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        rendered = repr(data)
+    if len(rendered) > limit:
+        return f"{rendered[:limit]}… (truncated)"
+    return rendered
 
 
 class ContificoClientError(RuntimeError):
@@ -25,11 +40,23 @@ class ContificoTransportError(ContificoClientError):
 class ContificoAPIError(ContificoClientError):
     """Raised when the API returns an error payload."""
 
-    def __init__(self, status_code: int, detail: str, payload: Any | None = None) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        detail: str,
+        payload: Any | None = None,
+        *,
+        context: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
         self.payload = payload
+        self.context = context or {}
+
+    def __str__(self) -> str:  # pragma: no cover - representation helper
+        context_repr = f", contexto={self.context}" if self.context else ""
+        return f"{self.detail} (status={self.status_code}{context_repr})"
 
 
 class ContificoClient:
@@ -80,6 +107,12 @@ class ContificoClient:
             "Accept": "application/json",
             "Content-Type": "application/json; charset=UTF-8",
         }
+        logger.debug(
+            "Contifico request %s %s params=%s",
+            method,
+            url,
+            _serialise_for_log(params or {}),
+        )
         try:
             response = requests.request(
                 method=method,
@@ -94,16 +127,43 @@ class ContificoClient:
                 f"No se pudo conectar con Contífico: {exc}".rstrip()
             ) from exc
 
+        payload = self._safe_json(response)
         if response.status_code >= 400:
+            logger.error(
+                "Contifico API error %s %s status=%s params=%s body=%s",
+                method,
+                url,
+                response.status_code,
+                _serialise_for_log(params or {}),
+                _serialise_for_log(payload),
+            )
             raise ContificoAPIError(
                 response.status_code,
                 self._extract_error_message(response),
-                payload=self._safe_json(response),
+                payload=payload,
+                context={
+                    "method": method,
+                    "url": url,
+                    "params": params or {},
+                },
             )
 
         if not response.content:
+            logger.debug(
+                "Contifico response %s %s status=%s body=<empty>",
+                method,
+                url,
+                response.status_code,
+            )
             return None
-        return self._safe_json(response)
+        logger.debug(
+            "Contifico response %s %s status=%s body=%s",
+            method,
+            url,
+            response.status_code,
+            _serialise_for_log(payload),
+        )
+        return payload
 
     @staticmethod
     def _safe_json(response: requests.Response) -> Any | None:
@@ -156,6 +216,7 @@ class ContificoClient:
                     200,
                     f"El formato de respuesta para {endpoint} no es el esperado.",
                     payload=payload,
+                    context={"endpoint": endpoint, "params": params},
                 )
             if not payload:
                 break
