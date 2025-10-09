@@ -277,7 +277,7 @@ def generate_product_kpis(
         for item in collection:
             if item.source_product_id:
                 internal_ids.add(item.source_product_id)
-    if product_id:
+    if product_id and product_id != product_sku:
         internal_ids.add(product_id)
     identifiers = sorted(internal_ids)
     resolved_safety = _resolve_safety_stock(safety_stock, product_sku, identifiers)

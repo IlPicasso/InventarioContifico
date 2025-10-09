@@ -139,20 +139,38 @@ def _iter_purchase_lines(record: dict) -> Iterator[Purchase]:
         if not receipt:
             receipt = _extract_first_datetime(data, _RECEIPT_FIELDS)
         if not receipt and receptions:
+            reference_candidates = {
+                str(value).strip()
+                for value in (
+                    raw_product_id,
+                    product_identifier,
+                    line.get("producto_codigo")
+                    or line.get("codigo")
+                    or line.get("product_code")
+                    or line.get("sku"),
+                )
+                if value
+            }
             for reception in receptions:
                 reception_date = _parse_datetime(
                     reception.get("fecha")
                     or reception.get("fecha_recepcion")
                     or reception.get("created_at")
                 )
-                    for detail in reception.get("detalles", []):
-                        detail_product = (
-                            detail.get("producto_id")
-                            or detail.get("product_id")
-                            or detail.get("variant_id")
-                        )
-                        reference_id = raw_product_id or product_identifier
-                        if detail_product and str(detail_product) == str(reference_id):
+                for detail in reception.get("detalles", []):
+                    detail_product = (
+                        detail.get("producto_id")
+                        or detail.get("product_id")
+                        or detail.get("variant_id")
+                        or detail.get("producto_codigo")
+                        or detail.get("codigo")
+                        or detail.get("product_code")
+                        or detail.get("sku")
+                    )
+                    if (
+                        detail_product
+                        and str(detail_product).strip() in reference_candidates
+                    ):
                         receipt = reception_date
                         break
                 if receipt:
