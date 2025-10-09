@@ -134,6 +134,43 @@ def test_loaders_build_domain_models(repo: InventoryRepository, sample_data: Non
     assert base_filtered[0].variant_size == "54"
 
 
+def test_loaders_fallback_to_documents(repo: InventoryRepository) -> None:
+    repo.upsert_records(
+        "documents",
+        [
+            {
+                "id": "DOC-PO-1",
+                "tipo": "LQC",
+                "tipo_registro": "PRO",
+                "fecha_emision": _iso(datetime(2024, 2, 1, 9)),
+                "fecha_recepcion": _iso(datetime(2024, 2, 3, 9)),
+                "detalles": [
+                    {"producto_id": "SKU-2/42", "cantidad": 4},
+                ],
+            },
+            {
+                "id": "DOC-SA-1",
+                "tipo": "FAC",
+                "tipo_registro": "CLI",
+                "fecha_emision": _iso(datetime(2024, 2, 5, 11)),
+                "detalles": [
+                    {"producto_id": "SKU-2/42", "cantidad": 3},
+                ],
+            },
+        ],
+    )
+
+    purchases = load_purchases(repo, product_id="SKU-2/42")
+    sales = load_sales(repo, product_id="SKU-2/42")
+
+    assert len(purchases) == 1
+    assert purchases[0].purchase_id == "DOC-PO-1"
+    assert purchases[0].quantity == 4
+    assert len(sales) == 1
+    assert sales[0].sale_id == "DOC-SA-1"
+    assert sales[0].quantity == 3
+
+
 def test_metric_calculations(repo: InventoryRepository, sample_data: None) -> None:
     purchases = load_purchases(repo, product_id="SKU-1/54")
     sales = load_sales(repo, product_id="SKU-1/54")
