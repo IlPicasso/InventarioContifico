@@ -482,21 +482,59 @@ body {
   font: inherit;
 }
 
-.lookup__button {
-  justify-self: start;
-  padding: 0.6rem 1.4rem;
-  border-radius: 8px;
-  border: none;
-  background: linear-gradient(135deg, #0b7285, #1971c2);
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.2s ease;
+.lookup__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
 }
 
-.lookup__button:hover {
+.lookup__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.lookup__button--primary {
+  background: linear-gradient(135deg, #0b7285, #1971c2);
+  color: #fff;
+  border: none;
+}
+
+.lookup__button--secondary {
+  background: #fff;
+  color: #0b7285;
+  border-color: var(--color-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.lookup__button--ghost {
+  background: transparent;
+  color: #0b7285;
+  border-color: transparent;
+  padding: 0.45rem 1rem;
+}
+
+.lookup__button--primary:hover,
+.lookup__button--secondary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 12px 20px rgba(25, 113, 194, 0.25);
+  box-shadow: 0 12px 20px rgba(25, 113, 194, 0.2);
+}
+
+.lookup__button--ghost:hover {
+  background: rgba(11, 114, 133, 0.08);
 }
 
 .lookup__status {
@@ -545,6 +583,52 @@ body {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 0.85rem;
   color: var(--color-text);
+}
+
+.lookup__status--sample {
+  margin-top: 1.5rem;
+  color: #0b7285;
+}
+
+.lookup__sample {
+  margin-top: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  background: var(--color-surface);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+.lookup__sample-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.lookup__sample-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.lookup__sample-text {
+  width: 100%;
+  min-height: 9rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: rgba(15, 23, 42, 0.03);
+  color: var(--color-text);
+  font-family: "Fira Code", "Source Code Pro", monospace;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.lookup__sample-hint {
+  margin: 0.75rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
 }
 
 .cards {
