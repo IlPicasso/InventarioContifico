@@ -55,6 +55,14 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
 class InventoryRepository:
     """Simple SQLite-backed repository for inventory data."""
 
+    RESOURCES = (
+        "products",
+        "purchases",
+        "sales",
+        "warehouses",
+        "inventory_movements",
+    )
+
     def __init__(self, db_path: Path | str) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -130,13 +138,7 @@ class InventoryRepository:
         synchronisation timestamp stored in ``sync_state``.
         """
 
-        resources = [
-            "products",
-            "purchases",
-            "sales",
-            "warehouses",
-            "inventory_movements",
-        ]
+        resources = list(self.RESOURCES)
         overview: OrderedDict[str, dict[str, Optional[str] | int]] = OrderedDict()
 
         with self._connection() as conn:
@@ -165,6 +167,11 @@ class InventoryRepository:
 
         return overview
 
+    def _validate_resource(self, resource: str) -> str:
+        if resource not in self.RESOURCES:
+            raise ValueError(f"Recurso desconocido: {resource}")
+        return resource
+
     def get_last_synced_at(self, endpoint: str) -> Optional[datetime]:
         with self._connection() as conn:
             cur = conn.execute(
@@ -185,6 +192,90 @@ class InventoryRepository:
                 """,
                 (endpoint, value.isoformat()),
             )
+
+    def search_records(
+        self,
+        resource: str,
+        query: str | None = None,
+        *,
+        limit: int = 20,
+    ) -> list[dict[str, Optional[str] | dict]]:
+        """Return locally stored records for ``resource`` matching ``query``.
+
+        The search checks both the identifier and the JSON payload. When no query
+        is provided the latest records are returned so operators can confirm that
+        synchronisation succeeded.
+        """
+
+        resource = self._validate_resource(resource)
+        limit = max(1, min(int(limit), 100))
+        cleaned_query = query.strip() if query else None
+        like_pattern = f"%{cleaned_query}%" if cleaned_query else None
+
+        with self._connection() as conn:
+            if cleaned_query:
+                rows = conn.execute(
+                    f"""
+                    SELECT id, data, updated_at, fetched_at
+                    FROM {resource}
+                    WHERE id = ? OR data LIKE ?
+                    ORDER BY fetched_at DESC
+                    LIMIT ?
+                    """,
+                    (cleaned_query, like_pattern, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    f"""
+                    SELECT id, data, updated_at, fetched_at
+                    FROM {resource}
+                    ORDER BY fetched_at DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+
+        results: list[dict[str, Optional[str] | dict]] = []
+        for row in rows or []:
+            payload = json.loads(row["data"]) if row["data"] else None
+            results.append(
+                {
+                    "id": row["id"],
+                    "data": payload,
+                    "updated_at": row["updated_at"],
+                    "fetched_at": row["fetched_at"],
+                }
+            )
+        return results
+
+    def get_record(self, resource: str, record_id: str) -> dict | None:
+        """Return a single stored record for ``resource`` by its identifier."""
+
+        resource = self._validate_resource(resource)
+        record_id = record_id.strip()
+        if not record_id:
+            return None
+
+        with self._connection() as conn:
+            row = conn.execute(
+                f"""
+                SELECT id, data, updated_at, fetched_at
+                FROM {resource}
+                WHERE id = ?
+                LIMIT 1
+                """,
+                (record_id,),
+            ).fetchone()
+
+        if not row:
+            return None
+        payload = json.loads(row["data"]) if row["data"] else None
+        return {
+            "id": row["id"],
+            "data": payload,
+            "updated_at": row["updated_at"],
+            "fetched_at": row["fetched_at"],
+        }
 
 
 def chunked(iterable: Iterable[dict], size: int) -> Iterator[Sequence[dict]]:

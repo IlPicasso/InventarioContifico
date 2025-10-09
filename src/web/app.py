@@ -166,6 +166,55 @@ def api_overview(repo: InventoryRepository = Depends(get_repository)) -> dict[st
     return {"resources": payload}
 
 
+@app.get("/api/resource/{resource_slug}")
+def api_search_resource(
+    resource_slug: str,
+    q: str | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    repo: InventoryRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    """Search downloaded records for a given resource."""
+
+    try:
+        results = repo.search_records(resource_slug, query=q, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return {
+        "resource": resource_slug,
+        "label": RESOURCE_LABELS.get(
+            resource_slug, resource_slug.replace("_", " ").title()
+        ),
+        "query": q,
+        "results": results,
+    }
+
+
+@app.get("/api/resource/{resource_slug}/item/{record_id}")
+def api_get_resource_item(
+    resource_slug: str,
+    record_id: str,
+    repo: InventoryRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    """Return a specific record stored locally for validation."""
+
+    try:
+        record = repo.get_record(resource_slug, record_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if not record:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    return {
+        "resource": resource_slug,
+        "label": RESOURCE_LABELS.get(
+            resource_slug, resource_slug.replace("_", " ").title()
+        ),
+        "record": record,
+    }
+
+
 @app.post("/api/sync", status_code=202)
 def api_trigger_sync(
     background: BackgroundTasks,
