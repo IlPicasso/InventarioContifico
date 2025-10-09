@@ -270,3 +270,33 @@ def test_generate_inventory_report(repo: InventoryRepository, sample_data: None)
 
     metadata = report["metadata"]
     assert metadata["low_stock_threshold_days"] == 30
+
+
+def test_stock_levels_fallback_to_products(repo: InventoryRepository) -> None:
+    repo.upsert_records(
+        "products",
+        [
+            {
+                "id": "SIM-1",
+                "tipo_producto": "SIM",
+                "cantidad_stock": "12.5",
+                "fecha_actualizacion": _iso(datetime(2024, 2, 1, 10)),
+            },
+            {
+                "id": "SIM-2",
+                "tipo_producto": "SIM",
+                "cantidad_stock": "0",
+                "fecha_modificacion": _iso(datetime(2024, 2, 1, 9)),
+            },
+        ],
+    )
+
+    levels = load_stock_levels(repo)
+    quantities_by_id = {level.product_id: level.quantity for level in levels}
+
+    assert quantities_by_id["SIM-1"] == pytest.approx(12.5)
+    assert quantities_by_id["SIM-2"] == pytest.approx(0.0)
+
+    filtered = load_stock_levels(repo, product_id="SIM-1")
+    assert len(filtered) == 1
+    assert filtered[0].product_id == "SIM-1"
