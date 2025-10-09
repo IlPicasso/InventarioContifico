@@ -54,6 +54,37 @@
   <p id="sync-status" class="sync__status" role="status"></p>
 </section>
 
+<section class="lookup">
+  <h2>Busca registros descargados</h2>
+  <p>
+    Valida la sincronización consultando los últimos registros o buscando por identificador o
+    palabra clave en los datos descargados.
+  </p>
+  <form id="lookup-form" class="lookup__form">
+    <label class="lookup__label" for="lookup-resource">Recurso</label>
+    <select id="lookup-resource" name="resource" class="lookup__input" required>
+      <option value="" disabled selected>Selecciona un recurso</option>
+      {% for option in resource_options %}
+      <option value="{{ option.slug }}">{{ option.label }}</option>
+      {% endfor %}
+    </select>
+    <label class="lookup__label" for="lookup-query">Término de búsqueda (opcional)</label>
+    <input
+      id="lookup-query"
+      name="query"
+      type="text"
+      class="lookup__input"
+      placeholder="ID exacto o palabra clave"
+    />
+    <button type="submit" class="lookup__button">Buscar</button>
+  </form>
+  <div id="lookup-status" class="lookup__status" role="status"></div>
+  <div id="lookup-results" class="lookup__results" hidden>
+    <h3 class="lookup__results-title">Coincidencias</h3>
+    <ul class="lookup__list"></ul>
+  </div>
+</section>
+
 <section class="cards">
   {% for resource in resources %}
   <article class="card">
@@ -106,6 +137,10 @@
 <script>
   const syncForm = document.querySelector('#sync-form');
   const syncStatus = document.querySelector('#sync-status');
+  const lookupForm = document.querySelector('#lookup-form');
+  const lookupStatus = document.querySelector('#lookup-status');
+  const lookupResults = document.querySelector('#lookup-results');
+  const lookupList = lookupResults ? lookupResults.querySelector('.lookup__list') : null;
 
   if (syncForm) {
     syncForm.addEventListener('submit', async (event) => {
@@ -156,6 +191,66 @@
           }
         });
       });
+    });
+  }
+
+  if (lookupForm && lookupStatus && lookupResults && lookupList) {
+    lookupForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(lookupForm);
+      const resource = formData.get('resource');
+      const query = formData.get('query');
+      if (!resource) {
+        lookupStatus.textContent = 'Selecciona un recurso para buscar.';
+        return;
+      }
+
+      lookupStatus.textContent = 'Buscando…';
+      lookupResults.hidden = true;
+      lookupList.innerHTML = '';
+
+      try {
+        const params = new URLSearchParams();
+        if (query) {
+          params.append('q', query);
+        }
+        const response = await fetch(
+          `/api/resource/${encodeURIComponent(resource)}${params.toString() ? `?${params}` : ''}`
+        );
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || 'No se pudo realizar la búsqueda');
+        }
+        const payload = await response.json();
+        const { results } = payload;
+        if (!results || results.length === 0) {
+          lookupStatus.textContent = 'No se encontraron coincidencias con los criterios proporcionados.';
+          return;
+        }
+
+        lookupStatus.textContent = `Se encontraron ${results.length} coincidencia(s).`;
+        results.forEach((item) => {
+          const element = document.createElement('li');
+          element.classList.add('lookup__item');
+          const title = document.createElement('h4');
+          title.textContent = `ID: ${item.id}`;
+          element.appendChild(title);
+          const meta = document.createElement('p');
+          meta.classList.add('lookup__meta');
+          const updated = item.updated_at ? new Date(item.updated_at).toLocaleString() : 'Desconocido';
+          const fetched = item.fetched_at ? new Date(item.fetched_at).toLocaleString() : 'Desconocido';
+          meta.textContent = `Actualizado: ${updated} · Capturado: ${fetched}`;
+          element.appendChild(meta);
+          const pre = document.createElement('pre');
+          pre.classList.add('lookup__payload');
+          pre.textContent = JSON.stringify(item.data, null, 2);
+          element.appendChild(pre);
+          lookupList.appendChild(element);
+        });
+        lookupResults.hidden = false;
+      } catch (error) {
+        lookupStatus.textContent = `Error: ${error.message}`;
+      }
     });
   }
 </script>

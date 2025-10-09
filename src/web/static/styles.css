@@ -188,6 +188,103 @@ body {
   min-height: 1.5rem;
 }
 
+.lookup {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-bottom: 2.5rem;
+  box-shadow: 0 12px 25px rgba(15, 23, 42, 0.08);
+}
+
+.lookup h2 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.lookup__form {
+  display: grid;
+  gap: 1rem;
+  margin: 1rem 0 0;
+}
+
+.lookup__label {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.lookup__input {
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  font: inherit;
+}
+
+.lookup__button {
+  justify-self: start;
+  padding: 0.6rem 1.4rem;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #0b7285, #1971c2);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.lookup__button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 20px rgba(25, 113, 194, 0.25);
+}
+
+.lookup__status {
+  margin-top: 1rem;
+  min-height: 1.5rem;
+  color: var(--color-muted);
+}
+
+.lookup__results {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.25rem;
+}
+
+.lookup__results-title {
+  margin: 0 0 0.75rem;
+}
+
+.lookup__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.lookup__item {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.02);
+  overflow-x: auto;
+}
+
+.lookup__meta {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.lookup__payload {
+  background: rgba(15, 23, 42, 0.05);
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
 .cards {
   display: grid;
   gap: 1.5rem;
