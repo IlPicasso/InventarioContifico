@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .sku import format_variant_label, split_sku_and_size
+
 
 class Purchase(BaseModel):
     """Representa una línea de compra asociada a un producto."""
@@ -39,6 +41,26 @@ class Purchase(BaseModel):
             return None
         return self.received_at - self.ordered_at
 
+    @property
+    def product_code(self) -> str:
+        """Código base del producto sin sufijo de talla."""
+
+        code, _ = split_sku_and_size(self.product_id)
+        return code
+
+    @property
+    def variant_size(self) -> str | None:
+        """Talla del producto cuando está disponible."""
+
+        _, size = split_sku_and_size(self.product_id)
+        return size
+
+    @property
+    def product_label(self) -> str:
+        """Etiqueta amigable para reportes, combinando código y talla."""
+
+        return format_variant_label(self.product_id)
+
 
 class Sale(BaseModel):
     """Representa una línea de venta de producto."""
@@ -57,6 +79,20 @@ class Sale(BaseModel):
     def _strip(cls, value: str) -> str:
         return value.strip()
 
+    @property
+    def product_code(self) -> str:
+        code, _ = split_sku_and_size(self.product_id)
+        return code
+
+    @property
+    def variant_size(self) -> str | None:
+        _, size = split_sku_and_size(self.product_id)
+        return size
+
+    @property
+    def product_label(self) -> str:
+        return format_variant_label(self.product_id)
+
 
 class StockLevel(BaseModel):
     """Representa una existencia disponible para un producto."""
@@ -72,6 +108,20 @@ class StockLevel(BaseModel):
     @classmethod
     def _strip(cls, value: str) -> str:
         return value.strip()
+
+    @property
+    def product_code(self) -> str:
+        code, _ = split_sku_and_size(self.product_id)
+        return code
+
+    @property
+    def variant_size(self) -> str | None:
+        _, size = split_sku_and_size(self.product_id)
+        return size
+
+    @property
+    def product_label(self) -> str:
+        return format_variant_label(self.product_id)
 
 
 __all__ = ["Purchase", "Sale", "StockLevel"]

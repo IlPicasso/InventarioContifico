@@ -16,6 +16,7 @@ from .sales_velocity import (
     calculate_sales_velocity,
     calculate_stock_coverage,
 )
+from .sku import format_variant_label, split_sku_and_size
 
 ProductReport = dict[str, Any]
 InventoryReport = dict[str, Any]
@@ -59,8 +60,14 @@ def _build_product_report(
             safety_stock=max(safety_stock, 0.0),
         )
 
+    product_code, variant_size = split_sku_and_size(product_id)
+    label = format_variant_label(product_id)
+
     return {
         "product_id": product_id,
+        "product_code": product_code,
+        "variant_size": variant_size,
+        "product_label": label,
         "average_lead_time_days": (
             lead.total_seconds() / 86_400 if lead else None
         ),
@@ -196,9 +203,17 @@ def generate_inventory_report(
     }
 
     rankings: dict[str, list[dict[str, Any]]] = {}
+    def _product_fields(report: ProductReport) -> dict[str, Any]:
+        return {
+            "product_id": report["product_id"],
+            "product_code": report.get("product_code"),
+            "variant_size": report.get("variant_size"),
+            "product_label": report.get("product_label", report["product_id"]),
+        }
+
     rankings["top_selling_products"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "total_sold_units": report["total_sold_units"],
             "sales_velocity_per_day": report["sales_velocity_per_day"],
         }
@@ -210,7 +225,7 @@ def generate_inventory_report(
     ]
     rankings["top_stock_levels"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "current_stock_units": report["current_stock_units"],
             "stock_coverage_days": report["stock_coverage_days"],
         }
@@ -222,7 +237,7 @@ def generate_inventory_report(
     ]
     rankings["longest_lead_times"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "average_lead_time_days": report["average_lead_time_days"],
         }
         for report in sorted(
@@ -233,7 +248,7 @@ def generate_inventory_report(
     ]
     rankings["fastest_turnover"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "inventory_turnover": report["inventory_turnover"],
         }
         for report in sorted(
@@ -246,7 +261,7 @@ def generate_inventory_report(
     alerts: dict[str, list[dict[str, Any]]] = {}
     alerts["low_stock"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "stock_coverage_days": report["stock_coverage_days"],
             "current_stock_units": report["current_stock_units"],
         }
@@ -262,7 +277,7 @@ def generate_inventory_report(
     ]
     alerts["reorder_recommended"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "reorder_point": report["reorder_point"],
             "current_stock_units": report["current_stock_units"],
         }
@@ -272,7 +287,7 @@ def generate_inventory_report(
     ]
     alerts["no_sales"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "current_stock_units": report["current_stock_units"],
         }
         for report in per_product_raw
@@ -280,7 +295,7 @@ def generate_inventory_report(
     ]
     alerts["no_purchases"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "current_stock_units": report["current_stock_units"],
         }
         for report in per_product_raw
@@ -288,7 +303,7 @@ def generate_inventory_report(
     ]
     alerts["excess_stock"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "stock_coverage_days": report["stock_coverage_days"],
             "current_stock_units": report["current_stock_units"],
         }
@@ -305,7 +320,7 @@ def generate_inventory_report(
     ]
     alerts["stagnant_stock"] = [
         {
-            "product_id": report["product_id"],
+            **_product_fields(report),
             "current_stock_units": report["current_stock_units"],
         }
         for report in per_product_raw

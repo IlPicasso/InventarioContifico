@@ -140,7 +140,10 @@ def load_purchases(
     purchases: list[Purchase] = []
     for record in records:
         for purchase in _iter_purchase_lines(record):
-            if product_id and purchase.product_id != product_id:
+            if product_id and (
+                purchase.product_id != product_id
+                and purchase.product_code != product_id
+            ):
                 continue
             purchases.append(purchase)
     return purchases
@@ -194,7 +197,9 @@ def load_sales(
     sales: list[Sale] = []
     for record in records:
         for sale in _iter_sale_lines(record):
-            if product_id and sale.product_id != product_id:
+            if product_id and (
+                sale.product_id != product_id and sale.product_code != product_id
+            ):
                 continue
             sales.append(sale)
     return sales
@@ -241,7 +246,9 @@ def load_stock_levels(
     stock_levels: list[StockLevel] = []
     for record in records:
         for stock in _iter_stock_levels(record):
-            if product_id and stock.product_id != product_id:
+            if product_id and (
+                stock.product_id != product_id and stock.product_code != product_id
+            ):
                 continue
             stock_levels.append(stock)
     return stock_levels

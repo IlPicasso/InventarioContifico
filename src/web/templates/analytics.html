@@ -115,7 +115,7 @@
       <tbody>
         {% for item in items %}
         <tr>
-          <td>{{ item.product_id }}</td>
+          <td>{{ item.product_label }}</td>
           {% if key == 'top_selling_products' %}
           <td class="is-number">{{ item.total_sold_units | format_metric(decimals=0) }}</td>
           <td class="is-number">{{ item.sales_velocity_per_day | format_metric }}</td>
@@ -153,7 +153,7 @@
         <ul>
           {% for alert in alerts[: params.top_n ] %}
           <li>
-            <strong>{{ alert.product_id }}</strong>
+            <strong>{{ alert.product_label }}</strong>
             <span class="analytics-alerts__meta">
               {% if alert.stock_coverage_days is not none %}
               Cobertura: {{ alert.stock_coverage_days | format_metric }} días ·
@@ -195,7 +195,7 @@
     <tbody>
       {% for product in products[: params.top_n ] %}
       <tr>
-        <td>{{ product.product_id }}</td>
+        <td>{{ product.product_label }}</td>
         <td class="is-number">{{ product.sales_velocity_per_day | format_metric }}</td>
         <td class="is-number">{{ product.stock_coverage_days | format_metric }}</td>
         <td class="is-number">{{ product.inventory_turnover | format_metric }}</td>
