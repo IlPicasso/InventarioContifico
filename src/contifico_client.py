@@ -496,7 +496,10 @@ class ContificoClient:
             "contabilidad/cuenta-contable/",
             updated_since=updated_since,
             page_size=page_size,
-            legacy_aliases=False,
+            # ``cuenta-contable`` ignora ``page``/``page_size`` y solo respeta los alias
+            # históricos ``result_*``. Si no los enviamos, Contífico devuelve siempre la
+            # primera página, lo que provoca un loop infinito cuando tenemos más datos.
+            legacy_aliases=True,
         )
 
     def iter_journal_entries(
