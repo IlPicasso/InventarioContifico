@@ -3,18 +3,26 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from io import BytesIO
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+from ..analytics import generate_inventory_report
 from ..contifico_client import ContificoClient
 from ..ingestion.sync_inventory import synchronise_inventory
 from ..persistence import InventoryRepository
@@ -27,6 +35,37 @@ TEMPLATES = Jinja2Templates(directory=str(BASE_PATH / "templates"))
 STATIC_DIR = BASE_PATH / "static"
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_VELOCITY_PERIOD_DAYS = 30
+DEFAULT_TURNOVER_PERIOD_DAYS = 90
+DEFAULT_LOW_STOCK_THRESHOLD_DAYS = 14.0
+DEFAULT_EXCESS_STOCK_THRESHOLD_DAYS = 60.0
+DEFAULT_TOP_N = 5
+ALERT_LABELS = {
+    "low_stock": "Bajo stock",
+    "reorder_recommended": "Requiere reposición",
+    "excess_stock": "Exceso de inventario",
+    "no_sales": "Sin ventas registradas",
+    "no_purchases": "Sin compras registradas",
+    "stagnant_stock": "Inventario estancado",
+}
+
+
+def _format_metric(value: Any, *, decimals: int = 2) -> str:
+    """Format metric values for presentation in templates."""
+
+    if value is None:
+        return "N/D"
+    if isinstance(value, (int, float)):
+        if isinstance(value, float):
+            formatted = f"{value:,.{decimals}f}"
+        else:
+            formatted = f"{value:,}"
+        return formatted.replace(",", "\u202f")
+    return str(value)
+
+
+TEMPLATES.env.filters.setdefault("format_metric", _format_metric)
 
 
 class Settings(BaseSettings):
@@ -88,6 +127,219 @@ UPCOMING_FEATURES = (
         "description": "Notificaciones para niveles críticos por bodega en base a mínimos configurables.",
     },
 )
+
+
+def _analytics_params(
+    *,
+    velocity_period_days: int | None,
+    turnover_period_days: int | None,
+    low_stock_threshold_days: float,
+    excess_stock_threshold_days: float,
+    top_n: int,
+    limit: int,
+) -> dict[str, Any]:
+    return {
+        "velocity_period_days": velocity_period_days,
+        "turnover_period_days": turnover_period_days,
+        "low_stock_threshold_days": low_stock_threshold_days,
+        "excess_stock_threshold_days": excess_stock_threshold_days,
+        "top_n": top_n,
+        "limit": limit,
+    }
+
+
+def _build_pdf_table(data: list[list[str]], *, header: bool = True) -> Table:
+    table = Table(data, hAlign="LEFT")
+    style = [
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d7deea")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ]
+    if header and data:
+        style.extend(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b7285")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ]
+        )
+    table.setStyle(TableStyle(style))
+    return table
+
+
+def _build_inventory_pdf(report: dict[str, Any], params: dict[str, Any]) -> BytesIO:
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=40,
+        rightMargin=40,
+        topMargin=60,
+        bottomMargin=36,
+    )
+    styles = getSampleStyleSheet()
+    story: list[Any] = []
+
+    summary = report.get("summary", {})
+    story.append(Paragraph("Reporte integral de inventario", styles["Title"]))
+    generated_at = summary.get("generated_at")
+    if generated_at:
+        story.append(Paragraph(f"Generado: {generated_at}", styles["BodyText"]))
+    story.append(
+        Paragraph(
+            "Parámetros del análisis: "
+            f"velocidad = {params['velocity_period_days'] or 'sin límite'} días · "
+            f"rotación = {params['turnover_period_days'] or 'sin límite'} días · "
+            f"umbral bajo = {params['low_stock_threshold_days']} días · "
+            f"umbral exceso = {params['excess_stock_threshold_days']} días",
+            styles["BodyText"],
+        )
+    )
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph("Resumen ejecutivo", styles["Heading2"]))
+    summary_rows = [
+        ["Métrica", "Valor"],
+        ["Productos analizados", _format_metric(summary.get("total_products"), decimals=0)],
+        ["Unidades compradas", _format_metric(summary.get("total_purchased_units"), decimals=0)],
+        ["Unidades vendidas", _format_metric(summary.get("total_sold_units"), decimals=0)],
+        ["Unidades en stock", _format_metric(summary.get("total_stock_units"), decimals=0)],
+        [
+            "Lead time promedio (días)",
+            _format_metric(summary.get("average_lead_time_days")),
+        ],
+        [
+            "Velocidad de ventas (unid/día)",
+            _format_metric(summary.get("overall_sales_velocity_per_day")),
+        ],
+        [
+            "Cobertura promedio (días)",
+            _format_metric(summary.get("overall_stock_coverage_days")),
+        ],
+        [
+            "Rotación de inventario",
+            _format_metric(summary.get("overall_inventory_turnover")),
+        ],
+    ]
+    story.append(_build_pdf_table(summary_rows))
+    story.append(Spacer(1, 18))
+
+    rankings = report.get("rankings", {})
+    ranking_definitions = [
+        (
+            "top_selling_products",
+            "Productos más vendidos",
+            ["Producto", "Unidades", "Velocidad/día"],
+            lambda item: [
+                item.get("product_id", "-"),
+                _format_metric(item.get("total_sold_units"), decimals=0),
+                _format_metric(item.get("sales_velocity_per_day")),
+            ],
+        ),
+        (
+            "top_stock_levels",
+            "Inventario disponible",
+            ["Producto", "Unidades", "Cobertura (días)"],
+            lambda item: [
+                item.get("product_id", "-"),
+                _format_metric(item.get("current_stock_units"), decimals=0),
+                _format_metric(item.get("stock_coverage_days")),
+            ],
+        ),
+        (
+            "fastest_turnover",
+            "Mayor rotación",
+            ["Producto", "Rotación"],
+            lambda item: [
+                item.get("product_id", "-"),
+                _format_metric(item.get("inventory_turnover")),
+            ],
+        ),
+        (
+            "longest_lead_times",
+            "Mayores lead times",
+            ["Producto", "Lead time (días)"],
+            lambda item: [
+                item.get("product_id", "-"),
+                _format_metric(item.get("average_lead_time_days")),
+            ],
+        ),
+    ]
+
+    for key, title, headers, formatter in ranking_definitions:
+        items = rankings.get(key) or []
+        if not items:
+            continue
+        story.append(Paragraph(title, styles["Heading2"]))
+        rows = [headers]
+        for entry in items:
+            rows.append(formatter(entry))
+        story.append(_build_pdf_table(rows))
+        story.append(Spacer(1, 12))
+
+    product_rows = [[
+        "Producto",
+        "Velocidad (unid/día)",
+        "Cobertura (días)",
+        "Rotación",
+        "Punto de reorden",
+        "Stock actual",
+    ]]
+    for product in report.get("products", [])[: params.get("top_n", DEFAULT_TOP_N)]:
+        product_rows.append(
+            [
+                product.get("product_id", "-"),
+                _format_metric(product.get("sales_velocity_per_day")),
+                _format_metric(product.get("stock_coverage_days")),
+                _format_metric(product.get("inventory_turnover")),
+                _format_metric(product.get("reorder_point")),
+                _format_metric(product.get("current_stock_units"), decimals=0),
+            ]
+        )
+    if len(product_rows) > 1:
+        story.append(Paragraph("Detalle por producto", styles["Heading2"]))
+        story.append(_build_pdf_table(product_rows))
+        story.append(Spacer(1, 12))
+
+    alerts = report.get("alerts", {})
+    if any(alerts.get(key) for key in ALERT_LABELS):
+        story.append(Paragraph("Alertas destacadas", styles["Heading2"]))
+        body = styles["BodyText"].clone("Alerts")
+        body.fontSize = 9
+        for key, label in ALERT_LABELS.items():
+            items = alerts.get(key) or []
+            if not items:
+                continue
+            story.append(Paragraph(label, styles["Heading3"]))
+            for entry in items[: params.get("top_n", DEFAULT_TOP_N)]:
+                details: list[str] = []
+                if "stock_coverage_days" in entry:
+                    details.append(
+                        f"Cobertura { _format_metric(entry.get('stock_coverage_days')) } días"
+                    )
+                if "current_stock_units" in entry:
+                    details.append(
+                        f"Stock { _format_metric(entry.get('current_stock_units'), decimals=0) }"
+                    )
+                if "reorder_point" in entry and entry.get("reorder_point") is not None:
+                    details.append(
+                        f"Reorden { _format_metric(entry.get('reorder_point')) }"
+                    )
+                story.append(
+                    Paragraph(
+                        f"&bull; Producto {entry.get('product_id', '-')}: "
+                        + (", ".join(details) or "sin datos adicionales"),
+                        body,
+                    )
+                )
+            story.append(Spacer(1, 6))
+
+    document.build(story)
+    buffer.seek(0)
+    return buffer
 
 
 @lru_cache()
@@ -159,6 +411,144 @@ def dashboard(
             "current_year": datetime.utcnow().year,
             "resource_options": resource_options,
         },
+    )
+
+
+@app.get("/analytics", response_class=HTMLResponse)
+def analytics_dashboard(
+    request: Request,
+    velocity_period_days: int | None = Query(
+        default=DEFAULT_VELOCITY_PERIOD_DAYS, ge=1, le=365
+    ),
+    turnover_period_days: int | None = Query(
+        default=DEFAULT_TURNOVER_PERIOD_DAYS, ge=1, le=730
+    ),
+    low_stock_threshold_days: float = Query(
+        default=DEFAULT_LOW_STOCK_THRESHOLD_DAYS, gt=0, le=365
+    ),
+    excess_stock_threshold_days: float = Query(
+        default=DEFAULT_EXCESS_STOCK_THRESHOLD_DAYS, gt=0, le=730
+    ),
+    top_n: int = Query(default=DEFAULT_TOP_N, ge=1, le=25),
+    limit: int = Query(default=1000, ge=10, le=5000),
+    repo: InventoryRepository = Depends(get_repository),
+) -> HTMLResponse:
+    params = _analytics_params(
+        velocity_period_days=velocity_period_days,
+        turnover_period_days=turnover_period_days,
+        low_stock_threshold_days=low_stock_threshold_days,
+        excess_stock_threshold_days=excess_stock_threshold_days,
+        top_n=top_n,
+        limit=limit,
+    )
+    report = generate_inventory_report(
+        repo,
+        velocity_period_days=velocity_period_days,
+        turnover_period_days=turnover_period_days,
+        low_stock_threshold_days=low_stock_threshold_days,
+        excess_stock_threshold_days=excess_stock_threshold_days,
+        top_n=top_n,
+        limit=limit,
+    )
+
+    summary = report.get("summary", {})
+    summary_cards = [
+        {
+            "label": "Productos analizados",
+            "value": _format_metric(summary.get("total_products"), decimals=0),
+        },
+        {
+            "label": "Unidades vendidas",
+            "value": _format_metric(summary.get("total_sold_units"), decimals=0),
+        },
+        {
+            "label": "Unidades en stock",
+            "value": _format_metric(summary.get("total_stock_units"), decimals=0),
+        },
+        {
+            "label": "Velocidad promedio (unid/día)",
+            "value": _format_metric(summary.get("overall_sales_velocity_per_day")),
+        },
+        {
+            "label": "Cobertura promedio (días)",
+            "value": _format_metric(summary.get("overall_stock_coverage_days")),
+        },
+        {
+            "label": "Rotación de inventario",
+            "value": _format_metric(summary.get("overall_inventory_turnover")),
+        },
+    ]
+
+    alerts = report.get("alerts", {})
+    alert_counters = {
+        key: len(alerts.get(key) or [])
+        for key in ALERT_LABELS
+    }
+
+    query = {k: v for k, v in params.items() if v is not None}
+    query_string = urlencode(query)
+    pdf_url = request.url_for("analytics_report_pdf")
+    if query_string:
+        pdf_url = f"{pdf_url}?{query_string}"
+
+    return TEMPLATES.TemplateResponse(
+        "analytics.html",
+        {
+            "request": request,
+            "report": report,
+            "summary_cards": summary_cards,
+            "alert_labels": ALERT_LABELS,
+            "alert_counters": alert_counters,
+            "params": params,
+            "pdf_url": pdf_url,
+            "current_year": datetime.utcnow().year,
+        },
+    )
+
+
+@app.get("/analytics/report.pdf")
+def analytics_report_pdf(
+    velocity_period_days: int | None = Query(
+        default=DEFAULT_VELOCITY_PERIOD_DAYS, ge=1, le=365
+    ),
+    turnover_period_days: int | None = Query(
+        default=DEFAULT_TURNOVER_PERIOD_DAYS, ge=1, le=730
+    ),
+    low_stock_threshold_days: float = Query(
+        default=DEFAULT_LOW_STOCK_THRESHOLD_DAYS, gt=0, le=365
+    ),
+    excess_stock_threshold_days: float = Query(
+        default=DEFAULT_EXCESS_STOCK_THRESHOLD_DAYS, gt=0, le=730
+    ),
+    top_n: int = Query(default=DEFAULT_TOP_N, ge=1, le=25),
+    limit: int = Query(default=1000, ge=10, le=5000),
+    repo: InventoryRepository = Depends(get_repository),
+) -> StreamingResponse:
+    params = _analytics_params(
+        velocity_period_days=velocity_period_days,
+        turnover_period_days=turnover_period_days,
+        low_stock_threshold_days=low_stock_threshold_days,
+        excess_stock_threshold_days=excess_stock_threshold_days,
+        top_n=top_n,
+        limit=limit,
+    )
+    report = generate_inventory_report(
+        repo,
+        velocity_period_days=velocity_period_days,
+        turnover_period_days=turnover_period_days,
+        low_stock_threshold_days=low_stock_threshold_days,
+        excess_stock_threshold_days=excess_stock_threshold_days,
+        top_n=top_n,
+        limit=limit,
+    )
+
+    pdf_buffer = _build_inventory_pdf(report, params)
+    filename = f"reporte-inventario-{datetime.utcnow():%Y%m%d}.pdf"
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

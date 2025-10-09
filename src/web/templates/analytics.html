@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Reportes de Inventario · Inventario Contifico{% endblock %}
+
+{% block content %}
+<section class="hero hero--analytics">
+  <h2 class="hero__title">KPIs accionables para tu inventario</h2>
+  <p class="hero__subtitle">
+    Explora métricas clave de rotación, cobertura y velocidad de ventas para priorizar acciones
+    y comparte un resumen ejecutivo con tu equipo.
+  </p>
+  <div class="analytics-actions">
+    <a class="analytics-button" href="{{ pdf_url }}">Descargar reporte en PDF</a>
+  </div>
+</section>
+
+<section class="analytics-controls">
+  <h2>Configura los parámetros del análisis</h2>
+  <form method="get" class="analytics-form">
+    <div class="analytics-form__grid">
+      <label>
+        Periodo para velocidad de ventas (días)
+        <input
+          type="number"
+          name="velocity_period_days"
+          min="1"
+          max="365"
+          value="{{ params.velocity_period_days or '' }}"
+        />
+      </label>
+      <label>
+        Periodo para rotación (días)
+        <input
+          type="number"
+          name="turnover_period_days"
+          min="1"
+          max="730"
+          value="{{ params.turnover_period_days or '' }}"
+        />
+      </label>
+      <label>
+        Umbral de alerta por bajo stock (días)
+        <input
+          type="number"
+          step="0.1"
+          name="low_stock_threshold_days"
+          min="1"
+          max="365"
+          value="{{ params.low_stock_threshold_days }}"
+        />
+      </label>
+      <label>
+        Umbral de alerta por exceso de stock (días)
+        <input
+          type="number"
+          step="0.1"
+          name="excess_stock_threshold_days"
+          min="1"
+          max="730"
+          value="{{ params.excess_stock_threshold_days }}"
+        />
+      </label>
+      <label>
+        Número máximo de elementos destacados
+        <input type="number" name="top_n" min="1" max="25" value="{{ params.top_n }}" />
+      </label>
+      <label>
+        Límite de registros analizados
+        <input type="number" name="limit" min="10" max="5000" value="{{ params.limit }}" />
+      </label>
+    </div>
+    <button type="submit" class="analytics-button analytics-button--primary">Actualizar métricas</button>
+  </form>
+</section>
+
+<section class="analytics-summary">
+  {% for card in summary_cards %}
+  <article class="analytics-card">
+    <h3>{{ card.label }}</h3>
+    <p>{{ card.value }}</p>
+  </article>
+  {% endfor %}
+</section>
+
+<section class="analytics-columns">
+  <article class="analytics-panel">
+    <h2>Rankings principales</h2>
+    {% set ranking_labels = {
+      'top_selling_products': 'Más vendidos',
+      'top_stock_levels': 'Mayor stock disponible',
+      'fastest_turnover': 'Mayor rotación',
+      'longest_lead_times': 'Lead time más extenso'
+    } %}
+    {% for key, title in ranking_labels.items() %}
+    {% set items = report.rankings.get(key, []) %}
+    {% if items %}
+    <h3>{{ title }}</h3>
+    <table class="analytics-table">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          {% if key == 'top_selling_products' %}
+          <th class="is-number">Unidades vendidas</th>
+          <th class="is-number">Velocidad (unid/día)</th>
+          {% elif key == 'top_stock_levels' %}
+          <th class="is-number">Stock actual</th>
+          <th class="is-number">Cobertura (días)</th>
+          {% elif key == 'fastest_turnover' %}
+          <th class="is-number">Índice de rotación</th>
+          {% elif key == 'longest_lead_times' %}
+          <th class="is-number">Lead time promedio (días)</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ item.product_id }}</td>
+          {% if key == 'top_selling_products' %}
+          <td class="is-number">{{ item.total_sold_units | format_metric(decimals=0) }}</td>
+          <td class="is-number">{{ item.sales_velocity_per_day | format_metric }}</td>
+          {% elif key == 'top_stock_levels' %}
+          <td class="is-number">{{ item.current_stock_units | format_metric(decimals=0) }}</td>
+          <td class="is-number">{{ item.stock_coverage_days | format_metric }}</td>
+          {% elif key == 'fastest_turnover' %}
+          <td class="is-number">{{ item.inventory_turnover | format_metric }}</td>
+          {% elif key == 'longest_lead_times' %}
+          <td class="is-number">{{ item.average_lead_time_days | format_metric }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% endfor %}
+  </article>
+
+  <article class="analytics-panel">
+    <h2>Alertas de inventario</h2>
+    <p class="analytics-panel__hint">
+      Se listan las situaciones detectadas según los umbrales configurados. Prioriza las alertas
+      con mayor urgencia para evitar quiebres o sobre stock.
+    </p>
+    <ul class="analytics-alerts">
+      {% for key, label in alert_labels.items() %}
+      {% set alerts = report.alerts.get(key, []) %}
+      <li class="analytics-alerts__item">
+        <header>
+          <h3>{{ label }}</h3>
+          <span class="analytics-alerts__badge">{{ alert_counters[key] }}</span>
+        </header>
+        {% if alerts %}
+        <ul>
+          {% for alert in alerts[: params.top_n ] %}
+          <li>
+            <strong>{{ alert.product_id }}</strong>
+            <span class="analytics-alerts__meta">
+              {% if alert.stock_coverage_days is not none %}
+              Cobertura: {{ alert.stock_coverage_days | format_metric }} días ·
+              {% endif %}
+              {% if alert.current_stock_units is not none %}
+              Stock: {{ alert.current_stock_units | format_metric(decimals=0) }}
+              {% endif %}
+              {% if alert.reorder_point is defined and alert.reorder_point is not none %}
+              · Punto de reorden: {{ alert.reorder_point | format_metric }}
+              {% endif %}
+            </span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="analytics-alerts__empty">Sin eventos para este criterio.</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+</section>
+
+<section class="analytics-panel analytics-panel--full">
+  <h2>Detalle resumido por producto</h2>
+  {% set products = report.products %}
+  {% if products %}
+  <table class="analytics-table analytics-table--full">
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th class="is-number">Velocidad (unid/día)</th>
+        <th class="is-number">Cobertura (días)</th>
+        <th class="is-number">Rotación</th>
+        <th class="is-number">Punto de reorden</th>
+        <th class="is-number">Stock actual</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for product in products[: params.top_n ] %}
+      <tr>
+        <td>{{ product.product_id }}</td>
+        <td class="is-number">{{ product.sales_velocity_per_day | format_metric }}</td>
+        <td class="is-number">{{ product.stock_coverage_days | format_metric }}</td>
+        <td class="is-number">{{ product.inventory_turnover | format_metric }}</td>
+        <td class="is-number">{{ product.reorder_point | format_metric }}</td>
+        <td class="is-number">{{ product.current_stock_units | format_metric(decimals=0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="analytics-alerts__empty">
+    Aún no se encuentran suficientes datos para calcular KPIs. Sincroniza tus catálogos y vuelve
+    a intentarlo.
+  </p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -11,6 +11,20 @@
       <div class="container">
         <h1 class="site-title">Inventario Contifico</h1>
         <p class="site-subtitle">Panel de control y base para próximos análisis.</p>
+        <nav class="site-nav">
+          <a
+            href="{{ url_for('dashboard') }}"
+            class="site-nav__link {% if request.url.path == '/' %}site-nav__link--active{% endif %}"
+          >
+            Estado general
+          </a>
+          <a
+            href="{{ url_for('analytics_dashboard') }}"
+            class="site-nav__link {% if request.url.path.startswith('/analytics') %}site-nav__link--active{% endif %}"
+          >
+            KPIs y reportes
+          </a>
+        </nav>
       </div>
     </header>
     <main class="container">
