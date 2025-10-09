@@ -592,6 +592,29 @@ def api_search_resource(
     }
 
 
+@app.get("/api/resource/{resource_slug}/sample")
+def api_sample_resource(
+    resource_slug: str,
+    limit: int = Query(default=5, ge=1, le=25),
+    repo: InventoryRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    """Return a small sample of stored records for the requested resource."""
+
+    try:
+        results = repo.search_records(resource_slug, limit=limit)
+    except ValueError as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return {
+        "resource": resource_slug,
+        "label": RESOURCE_LABELS.get(
+            resource_slug, resource_slug.replace("_", " ").title()
+        ),
+        "count": len(results),
+        "results": results,
+    }
+
+
 @app.get("/api/resource/{resource_slug}/item/{record_id}")
 def api_get_resource_item(
     resource_slug: str,

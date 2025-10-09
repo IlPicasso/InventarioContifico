@@ -76,12 +76,41 @@
       class="lookup__input"
       placeholder="ID exacto o palabra clave"
     />
-    <button type="submit" class="lookup__button">Buscar</button>
+    <div class="lookup__actions">
+      <button type="submit" class="lookup__button lookup__button--primary">Buscar</button>
+      <button
+        type="button"
+        id="sample-button"
+        class="lookup__button lookup__button--secondary"
+      >
+        Copiar muestra
+      </button>
+    </div>
   </form>
   <div id="lookup-status" class="lookup__status" role="status"></div>
   <div id="lookup-results" class="lookup__results" hidden>
     <h3 class="lookup__results-title">Coincidencias</h3>
     <ul class="lookup__list"></ul>
+  </div>
+  <div id="sample-status" class="lookup__status lookup__status--sample" role="status"></div>
+  <div id="sample-output" class="lookup__sample" hidden>
+    <div class="lookup__sample-header">
+      <h3 class="lookup__sample-title">Muestra lista para compartir</h3>
+      <button type="button" id="sample-copy" class="lookup__button lookup__button--ghost">
+        Copiar de nuevo
+      </button>
+    </div>
+    <textarea
+      id="sample-payload"
+      class="lookup__sample-text"
+      rows="8"
+      readonly
+      aria-label="Contenido de la muestra para copiar"
+    ></textarea>
+    <p class="lookup__sample-hint">
+      Cuando generes la muestra se copiará automáticamente al portapapeles.
+      Si falla, selecciona el contenido manualmente o usa el botón «Copiar de nuevo».
+    </p>
   </div>
 </section>
 
@@ -141,6 +170,12 @@
   const lookupStatus = document.querySelector('#lookup-status');
   const lookupResults = document.querySelector('#lookup-results');
   const lookupList = lookupResults ? lookupResults.querySelector('.lookup__list') : null;
+  const lookupResource = lookupForm ? lookupForm.querySelector('#lookup-resource') : null;
+  const sampleButton = document.querySelector('#sample-button');
+  const sampleStatus = document.querySelector('#sample-status');
+  const sampleOutput = document.querySelector('#sample-output');
+  const sampleTextarea = document.querySelector('#sample-payload');
+  const sampleCopyButton = document.querySelector('#sample-copy');
 
   if (syncForm) {
     syncForm.addEventListener('submit', async (event) => {
@@ -251,6 +286,105 @@
       } catch (error) {
         lookupStatus.textContent = `Error: ${error.message}`;
       }
+    });
+  }
+
+  if (
+    lookupForm &&
+    lookupResource &&
+    sampleButton &&
+    sampleStatus &&
+    sampleOutput &&
+    sampleTextarea &&
+    sampleCopyButton
+  ) {
+    const buildSampleText = (payload) => {
+      const { resource, label, results } = payload;
+      const simplified = (results || []).map((item) => ({
+        id: item.id,
+        updated_at: item.updated_at,
+        fetched_at: item.fetched_at,
+        data: item.data,
+      }));
+      const header = `Recurso: ${label || resource} (${resource})`;
+      const countLine = `Muestra (${simplified.length} registro(s))`;
+      const body = JSON.stringify(simplified, null, 2);
+      return `${header}\n${countLine}\n${body}`;
+    };
+
+    sampleButton.addEventListener('click', async () => {
+      const formData = new FormData(lookupForm);
+      const resource = formData.get('resource');
+      if (!resource) {
+        sampleStatus.textContent = 'Selecciona un recurso para obtener la muestra.';
+        sampleOutput.hidden = true;
+        sampleTextarea.value = '';
+        return;
+      }
+
+      sampleStatus.textContent = 'Generando muestra…';
+      sampleOutput.hidden = true;
+      sampleTextarea.value = '';
+
+      try {
+        const response = await fetch(
+          `/api/resource/${encodeURIComponent(resource)}/sample`
+        );
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.detail || 'No se pudo generar la muestra');
+        }
+        const payload = await response.json();
+        const { results } = payload;
+        if (!results || results.length === 0) {
+          sampleStatus.textContent = 'Todavía no hay registros sincronizados para este recurso.';
+          return;
+        }
+
+        const clipboardText = buildSampleText(payload);
+        sampleTextarea.value = clipboardText;
+        sampleOutput.hidden = false;
+
+        let copied = false;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try {
+            await navigator.clipboard.writeText(clipboardText);
+            sampleStatus.textContent = '✔ Muestra copiada al portapapeles. ¡Lista para compartir!';
+            copied = true;
+          } catch (copyError) {
+            console.warn('No se pudo copiar automáticamente la muestra', copyError);
+          }
+        }
+
+        if (!copied) {
+          sampleStatus.textContent =
+            'Muestra generada. Copia manualmente el contenido o usa «Copiar de nuevo».';
+        }
+      } catch (error) {
+        sampleStatus.textContent = `Error: ${error.message}`;
+        sampleOutput.hidden = true;
+        sampleTextarea.value = '';
+      }
+    });
+
+    sampleCopyButton.addEventListener('click', async () => {
+      const content = sampleTextarea.value;
+      if (!content) {
+        sampleStatus.textContent = 'Genera una muestra antes de copiarla.';
+        return;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(content);
+          sampleStatus.textContent = '✔ Muestra copiada nuevamente al portapapeles.';
+          return;
+        } catch (error) {
+          console.warn('No se pudo copiar la muestra al portapapeles', error);
+        }
+      }
+
+      sampleStatus.textContent = 'No se pudo copiar automáticamente. Selecciona el texto manualmente.';
     });
   }
 </script>
