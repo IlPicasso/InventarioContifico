@@ -16,6 +16,7 @@ from src.analytics import (
     calculate_reorder_point,
     calculate_sales_velocity,
     calculate_stock_coverage,
+    generate_inventory_report,
     generate_product_kpis,
     load_purchases,
     load_sales,
@@ -173,8 +174,47 @@ def test_generate_product_kpis(repo: InventoryRepository, sample_data: None) -> 
     assert pytest.approx(report["stock_coverage_days"], rel=1e-3) == pytest.approx(32 / (10 / 11), rel=1e-3)
     assert pytest.approx(report["inventory_turnover"], rel=1e-3) == pytest.approx((10 / 16) * (365 / 30), rel=1e-3)
     assert pytest.approx(report["reorder_point"], rel=1e-3) == pytest.approx((10 / 11) * (98 / 24) + 5, rel=1e-3)
+    assert report["total_purchased_units"] == 18
+    assert report["total_sold_units"] == 10
+    assert report["current_stock_units"] == 32
 
     # Los objetos originales quedan disponibles para depurar o construir reportes.
     assert len(report["purchases"]) == 2
     assert len(report["sales"]) == 3
     assert len(report["stock_levels"]) == 2
+
+
+def test_generate_inventory_report(repo: InventoryRepository, sample_data: None) -> None:
+    report = generate_inventory_report(
+        repo,
+        turnover_period_days=30,
+        safety_stock={"SKU-1": 5},
+        low_stock_threshold_days=30,
+        excess_stock_threshold_days=30,
+    )
+
+    summary = report["summary"]
+    assert summary["total_products"] == 1
+    assert pytest.approx(summary["total_stock_units"], rel=1e-3) == 32
+    assert pytest.approx(summary["overall_sales_velocity_per_day"], rel=1e-3) == pytest.approx(10 / 11, rel=1e-3)
+    assert pytest.approx(summary["overall_stock_coverage_days"], rel=1e-3) == pytest.approx(32 / (10 / 11), rel=1e-3)
+
+    products = report["products"]
+    assert len(products) == 1
+    product_entry = products[0]
+    assert product_entry["product_id"] == "SKU-1"
+    assert product_entry["purchases"][0]["product_id"] == "SKU-1"
+    assert product_entry["sales"][0]["product_id"] == "SKU-1"
+
+    rankings = report["rankings"]
+    assert rankings["top_selling_products"][0]["product_id"] == "SKU-1"
+    assert rankings["top_stock_levels"][0]["product_id"] == "SKU-1"
+
+    alerts = report["alerts"]
+    assert alerts["low_stock"] == []
+    assert alerts["reorder_recommended"] == []
+    assert alerts["excess_stock"][0]["product_id"] == "SKU-1"
+    assert alerts["stagnant_stock"] == []
+
+    metadata = report["metadata"]
+    assert metadata["low_stock_threshold_days"] == 30
