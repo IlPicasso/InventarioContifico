@@ -192,38 +192,68 @@ class ContificoClient:
         updated_since: Optional[datetime] = None,
         page_size: int | None = None,
         extra_params: Optional[Dict[str, Any]] = None,
+        legacy_aliases: bool = True,
     ) -> Iterator[Dict[str, Any]]:
         size = page_size or self.default_page_size
+        base_params: Dict[str, Any] = {}
+        if updated_since is not None:
+            base_params["fecha_modificacion__gte"] = updated_since.isoformat()
+        if extra_params:
+            base_params.update(extra_params)
+
         page = 1
         while True:
             params: Dict[str, Any] = {
                 "page": page,
                 "page_size": size,
-                # Algunos despliegues siguen usando los alias históricos.
-                "result_page": page,
-                "result_size": size,
             }
-            if updated_since is not None:
-                params["fecha_modificacion__gte"] = updated_since.isoformat()
-            if extra_params:
-                params.update(extra_params)
+            if legacy_aliases:
+                # Algunos despliegues siguen usando los alias históricos ``result_*``.
+                params["result_page"] = page
+                params["result_size"] = size
+            if base_params:
+                params.update(base_params)
 
             payload = self._request("GET", endpoint, params=params)
             if payload is None:
                 break
-            if not isinstance(payload, list):
+
+            # Algunos endpoints de Contífico devuelven directamente la lista de
+            # resultados (legacy) mientras que otros siguen la convención de un
+            # objeto paginado con ``results`` y ``next``. Soportamos ambos para
+            # mantener compatibilidad independientemente de la versión del API.
+            has_next = False
+            if isinstance(payload, list):
+                items = payload
+                has_next = len(items) >= size
+            elif isinstance(payload, dict):
+                results = payload.get("results")
+                if not isinstance(results, list):
+                    raise ContificoAPIError(
+                        200,
+                        f"El formato de respuesta para {endpoint} no es el esperado.",
+                        payload=payload,
+                        context={"endpoint": endpoint, "params": params},
+                    )
+                items = results
+                next_url = payload.get("next")
+                has_next = bool(next_url)
+            else:
                 raise ContificoAPIError(
                     200,
                     f"El formato de respuesta para {endpoint} no es el esperado.",
                     payload=payload,
                     context={"endpoint": endpoint, "params": params},
                 )
-            if not payload:
+
+            if not items:
                 break
-            for item in payload:
+
+            for item in items:
                 if isinstance(item, dict):
                     yield item
-            if len(payload) < size:
+
+            if not has_next:
                 break
             page += 1
 
@@ -296,4 +326,5 @@ class ContificoClient:
             "movimiento-inventario/",
             updated_since=updated_since,
             page_size=page_size,
+            legacy_aliases=False,
         )
