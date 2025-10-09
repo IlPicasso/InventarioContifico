@@ -49,6 +49,11 @@ páginas al API (`CONTIFICO_PAGE_SIZE`) y la capa de persistencia agrupa los reg
 (`SYNC_BATCH_SIZE`) antes de confirmarlos en disco. Así evitamos saturar memoria al descargar todos
 los catálogos y documentos históricos.
 
+El catálogo de plan de cuentas (`GET /contabilidad/cuenta-contable/`) responde con mayor lentitud
+cuando se solicitan páginas muy grandes, por lo que el cliente impone un límite máximo de 100
+registros por solicitud para prevenir *timeouts*. Si indicas un `--page-size` o `CONTIFICO_PAGE_SIZE`
+mayor, ese valor se recortará automáticamente al umbral permitido para este recurso específico.
+
 Desde el formulario web puedes elegir **qué módulos sincronizar** (deja las casillas vacías para
 traer todo) y activar un modo de **descarga completa** que ignora el historial guardado para volver a
 pedir cada documento.
