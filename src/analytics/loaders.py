@@ -316,6 +316,10 @@ def _iter_stock_levels(record: dict) -> Iterator[StockLevel]:
         or data.get("stock")
         or data.get("cantidad")
         or data.get("quantity")
+        or data.get("cantidad_stock")
+        or data.get("stock_total")
+        or data.get("saldo")
+        or data.get("existencia_total")
         or 0,
     )
     yield StockLevel(
@@ -336,6 +340,7 @@ def load_stock_levels(
 
     records = repo.search_records("variants", limit=limit)
     stock_levels: list[StockLevel] = []
+    seen_products: set[str] = set()
     for record in records:
         for stock in _iter_stock_levels(record):
             if product_id and (
@@ -343,6 +348,24 @@ def load_stock_levels(
             ):
                 continue
             stock_levels.append(stock)
+            seen_products.add(stock.product_id)
+
+    # Algunos catálogos sólo informan inventario a nivel de producto simple en el
+    # endpoint de ``products``. Cuando no existen variantes sincronizadas (o el
+    # inventario aún no se ha actualizado allí) usamos esos valores para no
+    # perder visibilidad del stock disponible.
+    if len(stock_levels) < limit:
+        product_records = repo.search_records("products", limit=limit)
+        for record in product_records:
+            for stock in _iter_stock_levels(record):
+                if stock.product_id in seen_products:
+                    continue
+                if product_id and (
+                    stock.product_id != product_id and stock.product_code != product_id
+                ):
+                    continue
+                stock_levels.append(stock)
+                seen_products.add(stock.product_id)
     return stock_levels
 
 
