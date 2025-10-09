@@ -194,8 +194,15 @@ class ContificoClient:
         extra_params: Optional[Dict[str, Any]] = None,
         legacy_aliases: bool = True,
         updated_since_field: str = "fecha_modificacion__gte",
+        page_size_cap: int | None = None,
     ) -> Iterator[Dict[str, Any]]:
         size = page_size or self.default_page_size
+        if page_size_cap is not None:
+            size = min(size, page_size_cap)
+        if size <= 0:
+            raise ContificoConfigurationError(
+                "El tamaño de página debe ser mayor a cero para paginar resultados."
+            )
         base_params: Dict[str, Any] = {}
         if updated_since is not None:
             base_params[updated_since_field] = updated_since.isoformat()
@@ -492,6 +499,10 @@ class ContificoClient:
     ) -> Iterable[Dict[str, Any]]:
         """Yield accounting chart of accounts entries."""
 
+        # ``cuenta-contable`` tarda en responder cuando le pedimos páginas muy
+        # grandes, lo que termina provocando ``ReadTimeout`` en la capa HTTP.
+        # Limitar el tamaño a 100 mantiene la respuesta dentro del timeout
+        # predeterminado de 30 segundos sin sacrificar compatibilidad.
         return self._iterate_endpoint(
             "contabilidad/cuenta-contable/",
             updated_since=updated_since,
@@ -500,6 +511,7 @@ class ContificoClient:
             # históricos ``result_*``. Si no los enviamos, Contífico devuelve siempre la
             # primera página, lo que provoca un loop infinito cuando tenemos más datos.
             legacy_aliases=True,
+            page_size_cap=100,
         )
 
     def iter_journal_entries(
