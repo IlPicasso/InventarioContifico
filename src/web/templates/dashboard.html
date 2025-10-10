@@ -286,10 +286,7 @@
       }
       const value = normaliseIdentifierValue(payload[field]);
       if (value) {
-        if (!item.id || value !== item.id) {
-          return { label: config.label, value };
-        }
-        return { label: config.label, value, sameAsId: true };
+        return { label: config.label, value };
       }
     }
     return null;
@@ -335,10 +332,12 @@
           element.classList.add('lookup__item');
           const title = document.createElement('h4');
           const identifier = deriveIdentifier(resource, item);
-          if (identifier && !identifier.sameAsId) {
+          if (identifier) {
             title.textContent = `${identifier.label}: ${identifier.value}`;
-          } else {
+          } else if (item.id) {
             title.textContent = `ID: ${item.id}`;
+          } else {
+            title.textContent = 'Sin identificador';
           }
           element.appendChild(title);
           const meta = document.createElement('p');
@@ -346,7 +345,7 @@
           const updated = item.updated_at ? new Date(item.updated_at).toLocaleString() : 'Desconocido';
           const fetched = item.fetched_at ? new Date(item.fetched_at).toLocaleString() : 'Desconocido';
           const metaParts = [`Actualizado: ${updated}`, `Capturado: ${fetched}`];
-          if (identifier && !identifier.sameAsId && item.id) {
+          if (item.id && (!identifier || identifier.value !== item.id)) {
             metaParts.push(`ID interno: ${item.id}`);
           }
           meta.textContent = metaParts.join(' · ');
