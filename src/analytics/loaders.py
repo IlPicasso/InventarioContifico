@@ -33,6 +33,11 @@ _SALE_DATETIME_FIELDS = (
     "fecha",
     "created_at",
     "fecha_venta",
+    "fecha_documento",
+    "fecha_registro",
+    "fecha_modificacion",
+    "fecha_creacion",
+    "updated_at",
 )
 
 _STOCK_DATETIME_FIELDS = (
