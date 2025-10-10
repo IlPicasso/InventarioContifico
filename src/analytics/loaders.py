@@ -48,6 +48,14 @@ _STOCK_DATETIME_FIELDS = (
 )
 
 
+_LATIN_DATE_FORMATS = (
+    "%d/%m/%Y %H:%M:%S",
+    "%d/%m/%Y %H:%M",
+    "%d/%m/%Y %H:%M:%S.%f",
+    "%d/%m/%Y",
+)
+
+
 def _parse_datetime(value: str | datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -60,7 +68,12 @@ def _parse_datetime(value: str | datetime | None) -> datetime | None:
     try:
         return datetime.fromisoformat(text)
     except ValueError:
-        return None
+        for fmt in _LATIN_DATE_FORMATS:
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+    return None
 
 
 def _parse_float(value: object, default: float = 0.0) -> float:

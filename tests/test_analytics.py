@@ -364,6 +364,85 @@ def test_generate_inventory_report(repo: InventoryRepository, sample_data: None)
     assert metadata["low_stock_threshold_days"] == 30
 
 
+def test_inventory_report_supports_latin_dates(repo: InventoryRepository) -> None:
+    repo.upsert_records(
+        "categories",
+        [
+            {"id": "CAT-LAT", "nombre": "Promociones"},
+        ],
+    )
+    repo.upsert_records(
+        "products",
+        [
+            {
+                "id": "PR-LAT-1",
+                "codigo": "SKU-EC-42",
+                "nombre": "CAMISA PROMO",
+                "categoria_id": "CAT-LAT",
+            }
+        ],
+    )
+    repo.upsert_records(
+        "purchases",
+        [
+            {
+                "id": "PO-LAT-1",
+                "fecha_emision": "05/06/2025",
+                "fecha_recepcion": "07/06/2025",
+                "detalles": [
+                    {
+                        "producto_id": "PR-LAT-1",
+                        "producto_codigo": "SKU-EC-42",
+                        "cantidad": "12",
+                    }
+                ],
+            }
+        ],
+    )
+    repo.upsert_records(
+        "sales",
+        [
+            {
+                "id": "SA-LAT-1",
+                "fecha_emision": "08/06/2025",
+                "detalles": [
+                    {
+                        "producto_id": "PR-LAT-1",
+                        "producto_codigo": "SKU-EC-42",
+                        "cantidad": "5",
+                    }
+                ],
+            }
+        ],
+    )
+    repo.upsert_records(
+        "variants",
+        [
+            {
+                "id": "VAR-LAT-1",
+                "producto_id": "PR-LAT-1",
+                "codigo": "SKU-EC-42",
+                "existencia": "20",
+                "fecha_actualizacion": "09/06/2025",
+            }
+        ],
+    )
+
+    report = generate_inventory_report(repo)
+
+    summary = report["summary"]
+    assert summary["total_products"] == 1
+    assert summary["total_purchased_units"] == 12.0
+    assert summary["total_sold_units"] == 5.0
+    assert summary["total_stock_units"] == 20.0
+
+    product = report["products"][0]
+    assert product["product_id"] == "SKU-EC-42"
+    assert product["total_purchased_units"] == 12.0
+    assert product["total_sold_units"] == 5.0
+    assert product["current_stock_units"] == 20.0
+
+
 def test_stock_levels_fallback_to_products(repo: InventoryRepository) -> None:
     repo.upsert_records(
         "products",
