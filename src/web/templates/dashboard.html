@@ -229,6 +229,69 @@
     });
   }
 
+  const IDENTIFIER_FIELDS = {
+    products: { label: 'Código', fields: ['codigo', 'product_code', 'producto_codigo', 'sku', 'code'] },
+    variants: { label: 'Código', fields: ['codigo', 'code', 'sku', 'product_code', 'producto_codigo'] },
+    purchases: {
+      label: 'Número',
+      fields: ['numero', 'numero_documento', 'documento_numero', 'number', 'comprobante_numero'],
+    },
+    sales: {
+      label: 'Número',
+      fields: ['numero', 'number', 'documento_numero', 'comprobante_numero', 'secuencial'],
+    },
+    documents: { label: 'Número', fields: ['numero', 'number', 'documento_numero'] },
+    remission_guides: { label: 'Número', fields: ['numero', 'number', 'guia_numero'] },
+    registry_transactions: { label: 'Número', fields: ['numero', 'number', 'documento_numero'] },
+  };
+
+  const COMMON_IDENTIFIER_FIELDS = [
+    'codigo',
+    'codigo_principal',
+    'codigoAuxiliar',
+    'product_code',
+    'producto_codigo',
+    'sku',
+    'numero',
+    'number',
+    'name',
+    'nombre',
+  ];
+
+  const normaliseIdentifierValue = (value) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed || null;
+    }
+    if (typeof value === 'number' || typeof value === 'bigint') {
+      return `${value}`;
+    }
+    if (typeof value.toString === 'function') {
+      const text = value.toString();
+      return text && text !== '[object Object]' ? text : null;
+    }
+    return null;
+  };
+
+  const deriveIdentifier = (resource, item) => {
+    const payload = item && typeof item === 'object' ? item.data || {} : {};
+    const config = IDENTIFIER_FIELDS[resource] || { label: 'ID', fields: [] };
+    const candidates = [...config.fields, ...COMMON_IDENTIFIER_FIELDS];
+    for (const field of candidates) {
+      if (!payload || typeof payload !== 'object') {
+        break;
+      }
+      const value = normaliseIdentifierValue(payload[field]);
+      if (value) {
+        return { label: config.label, value };
+      }
+    }
+    return null;
+  };
+
   if (lookupForm && lookupStatus && lookupResults && lookupList) {
     lookupForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -268,13 +331,24 @@
           const element = document.createElement('li');
           element.classList.add('lookup__item');
           const title = document.createElement('h4');
-          title.textContent = `ID: ${item.id}`;
+          const identifier = deriveIdentifier(resource, item);
+          if (identifier) {
+            title.textContent = `${identifier.label}: ${identifier.value}`;
+          } else if (item.id) {
+            title.textContent = `ID: ${item.id}`;
+          } else {
+            title.textContent = 'Sin identificador';
+          }
           element.appendChild(title);
           const meta = document.createElement('p');
           meta.classList.add('lookup__meta');
           const updated = item.updated_at ? new Date(item.updated_at).toLocaleString() : 'Desconocido';
           const fetched = item.fetched_at ? new Date(item.fetched_at).toLocaleString() : 'Desconocido';
-          meta.textContent = `Actualizado: ${updated} · Capturado: ${fetched}`;
+          const metaParts = [`Actualizado: ${updated}`, `Capturado: ${fetched}`];
+          if (item.id && (!identifier || identifier.value !== item.id)) {
+            metaParts.push(`ID interno: ${item.id}`);
+          }
+          meta.textContent = metaParts.join(' · ');
           element.appendChild(meta);
           const pre = document.createElement('pre');
           pre.classList.add('lookup__payload');

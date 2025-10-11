@@ -3,6 +3,20 @@
 {% block title %}Reportes de Inventario · Inventario Contifico{% endblock %}
 
 {% block content %}
+{% macro product_display(item) -%}
+  {%- set code = item.product_code -%}
+  {%- set size = item.variant_size -%}
+  {%- if code %}
+    {{ code }}{% if size %} (Talla {{ size }}){% endif %}
+  {%- elif item.product_label %}
+    {{ item.product_label }}
+  {%- elif item.product_id %}
+    {{ item.product_id }}
+  {%- else %}
+    -
+  {%- endif %}
+{%- endmacro %}
+
 <section class="hero hero--analytics">
   <h2 class="hero__title">KPIs accionables para tu inventario</h2>
   <p class="hero__subtitle">
@@ -115,7 +129,7 @@
       <tbody>
         {% for item in items %}
         <tr>
-          <td>{{ item.product_label }}</td>
+          <td>{{ product_display(item) }}</td>
           {% if key == 'top_selling_products' %}
           <td class="is-number">{{ item.total_sold_units | format_metric(decimals=0) }}</td>
           <td class="is-number">{{ item.sales_velocity_per_day | format_metric }}</td>
@@ -153,7 +167,7 @@
         <ul>
           {% for alert in alerts[: params.top_n ] %}
           <li>
-            <strong>{{ alert.product_label }}</strong>
+            <strong>{{ product_display(alert) }}</strong>
             <span class="analytics-alerts__meta">
               {% if alert.stock_coverage_days is not none %}
               Cobertura: {{ alert.stock_coverage_days | format_metric }} días ·
@@ -195,7 +209,7 @@
     <tbody>
       {% for product in products[: params.top_n ] %}
       <tr>
-        <td>{{ product.product_label }}</td>
+        <td>{{ product_display(product) }}</td>
         <td class="is-number">{{ product.sales_velocity_per_day | format_metric }}</td>
         <td class="is-number">{{ product.stock_coverage_days | format_metric }}</td>
         <td class="is-number">{{ product.inventory_turnover | format_metric }}</td>

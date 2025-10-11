@@ -299,6 +299,35 @@ def test_loaders_fallback_to_documents(repo: InventoryRepository) -> None:
     assert sales[0].quantity == 3
 
 
+def test_load_sales_supports_records_with_fecha_registro(
+    repo: InventoryRepository,
+) -> None:
+    sale_timestamp = datetime(2024, 3, 5, 11)
+    expected_timestamp = sale_timestamp.replace(tzinfo=timezone.utc)
+    repo.upsert_records(
+        "sales",
+        [
+            {
+                "id": "SA-REG",
+                "fecha_registro": _iso(sale_timestamp),
+                "detalles": [
+                    {"producto_id": "SKU-REG/38", "cantidad": 4},
+                ],
+            }
+        ],
+    )
+
+    sales = load_sales(repo)
+
+    assert len(sales) == 1
+    assert sales[0].sold_at == expected_timestamp
+
+    report = generate_inventory_report(repo)
+
+    assert report["summary"]["total_sold_units"] == pytest.approx(4.0)
+    assert report["summary"]["overall_sales_velocity_per_day"] == pytest.approx(4.0)
+
+
 def test_metric_calculations(repo: InventoryRepository, sample_data: None) -> None:
     purchases = load_purchases(repo, product_id="SKU-1/54")
     sales = load_sales(repo, product_id="SKU-1/54")
