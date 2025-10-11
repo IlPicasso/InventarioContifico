@@ -183,6 +183,85 @@ def test_loaders_build_domain_models(repo: InventoryRepository, sample_data: Non
     assert len(internal_filtered) == 3
 
 
+def test_loaders_support_nested_payloads(repo: InventoryRepository) -> None:
+    repo.upsert_records(
+        "purchases",
+        [
+            {
+                "id": "NEST-PO",
+                "data": {
+                    "id": "NEST-PO",
+                    "updated_at": "05/06/2024",
+                    "data": {
+                        "fecha_emision": "05/06/2024",
+                        "fecha_recepcion": "06/06/2024",
+                        "tipo_documento": "LQC",
+                        "tipo_registro": "PRO",
+                        "detalles": [
+                            {
+                                "producto_id": "PROD-NEST",
+                                "producto_codigo": "SKU-NEST/01",
+                                "cantidad": "4",
+                            }
+                        ],
+                    },
+                },
+            }
+        ],
+    )
+
+    repo.upsert_records(
+        "sales",
+        [
+            {
+                "id": "NEST-SA",
+                "data": {
+                    "id": "NEST-SA",
+                    "updated_at": "07/06/2024",
+                    "data": {
+                        "fecha_emision": "07/06/2024",
+                        "tipo_documento": "FAC",
+                        "tipo_registro": "CLI",
+                        "detalles": [
+                            {
+                                "producto_id": "PROD-NEST",
+                                "producto_codigo": "SKU-NEST/01",
+                                "cantidad": "2",
+                            }
+                        ],
+                    },
+                },
+            }
+        ],
+    )
+
+    repo.upsert_records(
+        "variants",
+        [
+            {
+                "id": "NEST-STOCK",
+                "data": {
+                    "id": "NEST-STOCK",
+                    "updated_at": "08/06/2024",
+                    "data": {
+                        "producto_id": "PROD-NEST",
+                        "codigo": "SKU-NEST/01",
+                        "existencia": "6",
+                        "fecha_actualizacion": "08/06/2024",
+                    },
+                },
+            }
+        ],
+    )
+
+    purchases = load_purchases(repo)
+    sales = load_sales(repo)
+    stock = load_stock_levels(repo)
+
+    assert purchases and purchases[0].product_id == "SKU-NEST/01"
+    assert sales and sales[0].product_id == "SKU-NEST/01"
+    assert stock and stock[0].product_id == "SKU-NEST/01"
+
 def test_loaders_fallback_to_documents(repo: InventoryRepository) -> None:
     repo.upsert_records(
         "documents",

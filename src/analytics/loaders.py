@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable, Iterator, Sequence
+from typing import Iterable, Iterator, Mapping, Sequence
 
 from ..persistence import InventoryRepository
 from .models import Purchase, Sale, StockLevel
@@ -100,8 +100,33 @@ def _first_non_empty(source: dict, keys: Sequence[str]) -> str | None:
     return None
 
 
+def _normalise_record_data(record: Mapping) -> dict:
+    """Return the payload section of a Contífico record."""
+
+    data: Mapping | None = record.get("data") if isinstance(record, Mapping) else None
+    current: Mapping | None = data if isinstance(data, Mapping) else None
+
+    while isinstance(current, Mapping) and isinstance(current.get("data"), Mapping):
+        inner = dict(current["data"])
+        for key in ("id", "updated_at", "fetched_at"):
+            if key not in inner and key in current:
+                inner[key] = current[key]
+        current = inner
+
+    if not isinstance(current, Mapping):
+        return {}
+
+    result = dict(current)
+    for key in ("id", "updated_at", "fetched_at"):
+        if key not in result and key in record:
+            result[key] = record[key]
+        if key not in result and isinstance(data, Mapping) and key in data:
+            result[key] = data[key]
+    return result
+
+
 def _extract_from_payload(record: dict, *candidates: str) -> object | None:
-    data = record.get("data") or {}
+    data = _normalise_record_data(record)
     for key in candidates:
         if key in data and data[key] is not None:
             return data[key]
@@ -122,7 +147,7 @@ def _extract_registry_type(record: dict) -> str:
     )
 
 
-def _extract_first_datetime(data: dict, fields: Sequence[str]) -> datetime | None:
+def _extract_first_datetime(data: Mapping, fields: Sequence[str]) -> datetime | None:
     for field in fields:
         parsed = _parse_datetime(data.get(field))
         if parsed:
@@ -131,7 +156,7 @@ def _extract_first_datetime(data: dict, fields: Sequence[str]) -> datetime | Non
 
 
 def _iter_purchase_lines(record: dict) -> Iterator[Purchase]:
-    data = record.get("data") or {}
+    data = _normalise_record_data(record)
     ordered_at = _extract_first_datetime(data, _DATETIME_FIELDS)
     if not ordered_at:
         return iter(())
@@ -154,8 +179,12 @@ def _iter_purchase_lines(record: dict) -> Iterator[Purchase]:
         if not product_identifier:
             continue
         receipt = _extract_first_datetime(line, _RECEIPT_FIELDS)
+        if receipt and receptions and receipt <= ordered_at:
+            receipt = None
         if not receipt:
             receipt = _extract_first_datetime(data, _RECEIPT_FIELDS)
+        if receipt and receptions and receipt <= ordered_at:
+            receipt = None
         if not receipt and receptions:
             reference_candidates = {
                 str(value).strip()
@@ -267,7 +296,7 @@ def load_purchases(
 
 
 def _iter_sale_lines(record: dict) -> Iterator[Sale]:
-    data = record.get("data") or {}
+    data = _normalise_record_data(record)
     sold_at = _extract_first_datetime(data, _SALE_DATETIME_FIELDS)
     if not sold_at:
         return iter(())
@@ -357,7 +386,7 @@ def load_sales(
 
 
 def _iter_stock_levels(record: dict) -> Iterator[StockLevel]:
-    data = record.get("data") or {}
+    data = _normalise_record_data(record)
     raw_product_id = _first_non_empty(
         data,
         ("producto_id", "product_id", "variant_id", "id"),
