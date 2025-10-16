@@ -83,7 +83,33 @@ def synchronise_inventory(
 
         records = fetcher(client, last_synced, page_size)
         for batch in chunked(records, batch_size):
-            total += repo.upsert_records(endpoint, batch)
+            saved = repo.upsert_records(endpoint, batch)
+            batch_size_actual = len(batch)
+            total += saved
+            skipped = batch_size_actual - saved
+            if logger.isEnabledFor(logging.DEBUG):
+                sample_ids = []
+                for item in batch[:5]:
+                    sample_id = None
+                    for key in ("id", "codigo", "code", "uuid", "external_id"):
+                        value = item.get(key)
+                        if value:
+                            sample_id = str(value)
+                            break
+                    sample_ids.append(sample_id)
+                logger.debug(
+                    "Persistido lote de %s (%s/%s registros). Identificadores de muestra: %s",
+                    endpoint,
+                    saved,
+                    batch_size_actual,
+                    sample_ids,
+                )
+            if skipped:
+                logger.warning(
+                    "%s registros omitidos en el lote de %s por falta de identificador.",
+                    skipped,
+                    endpoint,
+                )
 
         repo.update_last_synced_at(endpoint, datetime.now(timezone.utc))
         totals[endpoint] = total

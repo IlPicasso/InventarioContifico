@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Iterator, Optional, Sequence
+
+logger = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sync_state (
@@ -120,6 +123,12 @@ class InventoryRepository:
         "cost_centers",
     )
 
+    DEFAULT_ID_FALLBACKS: tuple[str, ...] = ("codigo", "code", "uuid", "external_id")
+    RESOURCE_ID_FALLBACKS: dict[str, tuple[str, ...]] = {
+        # El endpoint de bodegas suele exponer ``codigo`` en lugar de ``id``.
+        "warehouses": ("codigo", "code", "codigo_bodega"),
+    }
+
     def __init__(self, db_path: Path | str) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -140,7 +149,7 @@ class InventoryRepository:
         self,
         endpoint: str,
         records: Iterable[dict],
-        record_id_field: str = "id",
+        record_id_field: str | Sequence[str] = ("id",),
         timestamp_fields: Sequence[str] | None = None,
     ) -> int:
         table = endpoint
@@ -156,11 +165,38 @@ class InventoryRepository:
                 "created_at",
             )
         )
+        if isinstance(record_id_field, str):
+            candidate_fields: tuple[str, ...] = (record_id_field,)
+        else:
+            candidate_fields = tuple(record_id_field) or ("id",)
+        extra_fields = self.RESOURCE_ID_FALLBACKS.get(endpoint, ())
+        default_extras = self.DEFAULT_ID_FALLBACKS
+        field_order: list[str] = []
+        for field in (*candidate_fields, *extra_fields, *default_extras):
+            if field not in field_order:
+                field_order.append(field)
+        candidate_fields = tuple(field_order)
         rows = 0
+        skipped = 0
         with self._connection() as conn:
             for record in records:
-                record_id = str(record.get(record_id_field))
-                if record_id is None:
+                record_id = None
+                for field in candidate_fields:
+                    value = record.get(field)
+                    if value is None:
+                        continue
+                    candidate = str(value).strip()
+                    if candidate:
+                        record_id = candidate
+                        break
+                if not record_id:
+                    skipped += 1
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(
+                            "Skipping %s record sin identificador válido. Campos disponibles: %s",
+                            endpoint,
+                            sorted(record.keys()),
+                        )
                     continue
                 updated_at = None
                 for field in timestamp_fields:
@@ -185,6 +221,12 @@ class InventoryRepository:
                     ),
                 )
                 rows += 1
+        if skipped:
+            logger.warning(
+                "Omitidos %s registros de %s por falta de identificador. Activa DEBUG para más detalles.",
+                skipped,
+                endpoint,
+            )
         return rows
 
     def get_resource_overview(self) -> OrderedDict[str, dict[str, Optional[str] | int]]:
